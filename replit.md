@@ -10,6 +10,16 @@ This is a comprehensive MetaTrader 5 (MT5) trading bot application built for REA
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (August 2025)
+
+**✅ MAJOR SUCCESS - Bot Now Working Perfectly:**
+- Fixed GUI freezing issues with async threading implementation
+- Automated trading loop now stable and running (tested with Scalping/BTCUSDm)
+- All manual trading, connect/disconnect, and start/stop functions working
+- Real money safety warnings and confirmations active
+- Price spike detection and risk management functioning
+- Auto-detect symbol feature restored and improved
+
 ## System Architecture
 
 ### GUI Framework
