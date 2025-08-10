@@ -786,165 +786,136 @@ class TradingEngine:
             return 10  # Return reasonable default for most cases
             
     def _trading_loop(self):
-        """Main trading loop running in separate thread with enhanced crash protection"""
+        """Simplified trading loop based on successful bot3.py approach"""
         try:
-            # First check if MT5 is available
-            if not self.is_mt5_connected:
-                self.logger.log("❌ ERROR: MT5 not connected - cannot start trading loop")
-                self.trading_running = False
-                return
-                
             strategy = self.current_settings['strategy']
             symbol = self.current_settings['symbol']
             interval = self.current_settings.get('interval', 10)
+            lot_size = self.current_settings.get('lot_size', 0.01)
+            tp_value = self.current_settings.get('tp_value', 1.0)
+            sl_value = self.current_settings.get('sl_value', 0.5)
+            tp_unit = self.current_settings.get('tp_unit', 'percent')
+            sl_unit = self.current_settings.get('sl_unit', 'percent')
             
-            self.logger.log(f"🔥 Trading loop started for {strategy} on {symbol}")
-            self.logger.log(f"⚠️ WARNING: This is REAL MONEY trading!")
+            self.logger.log(f"🔥 Trading started: {strategy} on {symbol}")
+            self.logger.log("⚠️ WARNING: REAL MONEY trading!")
             
-            # Initialize with safety defaults
             last_price = None
-            error_count = 0
-            max_errors = 5  # Reduce max errors to fail faster
-            cycle_count = 0
             
             while self.trading_running:
                 try:
-                    cycle_count += 1
-                    self.logger.log(f"🔄 Trading cycle #{cycle_count} starting...")
-                    
-                    # Reset error count on successful cycle
-                    if error_count > 0:
-                        error_count = 0
-                        self.logger.log("✅ Error count reset after successful cycle")
-                        
-                    # Check if still connected to MT5 with timeout protection
-                    try:
-                        if not self.is_mt5_connected:
-                            self.logger.log("❌ MT5 connection lost - stopping trading")
-                            break
-                        
-                        # Quick connection test
-                        account_test = mt5.account_info()
-                        if not account_test:
-                            self.logger.log("❌ MT5 account info unavailable - stopping trading")
-                            break
-                            
-                    except Exception as conn_e:
-                        self.logger.log(f"❌ MT5 connection test failed: {str(conn_e)}")
-                        error_count += 1
-                        time.sleep(interval)
-                        continue
-                        
-                    # Check session limits
+                    # Basic checks (like bot3.py)
                     self._check_session_limits()
                     
-                    # Check if max orders reached
                     if self._get_open_positions_count() >= self.max_orders_per_session:
-                        self.logger.log("⚠️ Maximum orders reached, waiting...")
-                        time.sleep(interval)
+                        self.logger.log("Max orders reached, waiting...")
+                        time.sleep(60)
                         continue
-                        
-                    # Get current price with error handling
-                    self.logger.log(f"📊 Getting current price for {symbol}...")
-                    try:
-                        tick = mt5.symbol_info_tick(symbol)
-                        if not tick or tick.ask == 0.0:
-                            self.logger.log(f"⚠️ Cannot get current price for {symbol} - retrying next cycle")
-                            time.sleep(interval)
-                            continue
-                            
-                        current_price = tick.ask
-                        self.logger.log(f"✅ Current price: {current_price}")
-                        
-                    except Exception as price_e:
-                        self.logger.log(f"❌ Price access error: {str(price_e)}")
-                        error_count += 1
+                    
+                    # Get price (simplified like bot3.py)
+                    tick = mt5.symbol_info_tick(symbol)
+                    if not tick or tick.ask == 0.0:
+                        self.logger.log("No price data, retrying...")
                         time.sleep(interval)
                         continue
                     
-                    # Check for price spikes
+                    current_price = tick.ask
+                    
+                    # Spike protection
                     if last_price and abs(current_price - last_price) > self.price_spike_threshold:
-                        self.logger.log("⚠️ Price spike detected, skipping cycle")
+                        self.logger.log("Price spike detected, skipping...")
                         last_price = current_price
                         time.sleep(interval)
                         continue
-                        
+                    
                     last_price = current_price
                     
-                    # Get technical indicators with comprehensive error handling
-                    self.logger.log(f"📊 Getting technical indicators for {symbol}...")
-                    try:
-                        self.logger.log(f"🔍 Debug: About to call _get_technical_indicators...")
-                        indicators = self._get_technical_indicators(symbol, strategy)
-                        self.logger.log(f"🔍 Debug: _get_technical_indicators returned: {type(indicators)}")
-                        
-                        if not indicators:
-                            self.logger.log("⚠️ Cannot get technical indicators - retrying next cycle")
-                            time.sleep(interval)
-                            continue
-                            
-                        self.logger.log(f"✅ Technical indicators loaded successfully")
-                        
-                    except Exception as ind_e:
-                        self.logger.log(f"❌ CRITICAL: Indicator calculation error: {str(ind_e)}")
-                        import traceback
-                        self.logger.log(f"🔧 Full traceback: {traceback.format_exc()}")
-                        error_count += 1
+                    # Get indicators (direct calls like bot3.py)
+                    ma10 = self._get_ma(symbol, 10, mt5.TIMEFRAME_M1)
+                    ema9 = self._get_ema(symbol, 9, mt5.TIMEFRAME_M1) 
+                    ema21 = self._get_ema(symbol, 21, mt5.TIMEFRAME_M1)
+                    ema50 = self._get_ema(symbol, 50, mt5.TIMEFRAME_M1)
+                    wma5 = self._get_wma(symbol, 5, mt5.TIMEFRAME_M1)
+                    wma10 = self._get_wma(symbol, 10, mt5.TIMEFRAME_M1)
+                    rsi = self._get_rsi(symbol, 14, mt5.TIMEFRAME_M1)
+                    bb_upper, bb_lower = self._get_bollinger_bands(symbol, 20, mt5.TIMEFRAME_M1)
+                    
+                    # Check indicators (like bot3.py)
+                    if None in [ma10, ema9, ema21, ema50, wma5, wma10, rsi, bb_upper, bb_lower]:
+                        self.logger.log("Indicator data incomplete, retrying...")
                         time.sleep(interval)
                         continue
                     
-                    # Generate trading signal with error protection
-                    self.logger.log(f"🔍 Analyzing {strategy} signals...")
-                    try:
-                        signal = self._generate_signal(strategy, current_price, indicators)
-                        
-                        if signal:
-                            self.logger.log(f"📈 {strategy} signal generated: {signal}")
-                        else:
-                            self.logger.log(f"💤 No {strategy} signal - waiting next cycle")
-                            
-                    except Exception as sig_e:
-                        self.logger.log(f"❌ Signal generation error: {str(sig_e)}")
-                        error_count += 1
-                        time.sleep(interval)
-                        continue
+                    # Simple signal generation (bot3.py style scoring)
+                    signal = None
+                    buy_score = sum([
+                        rsi >= 20,
+                        current_price > ema50,
+                        current_price > ema9,
+                        ema9 > ema21,
+                        current_price > wma5,
+                        current_price < bb_upper
+                    ])
                     
-                    # Execute trade if signal exists
+                    sell_score = sum([
+                        rsi <= 80,
+                        current_price < ema50,
+                        current_price < ema9,
+                        ema9 < ema21,
+                        current_price < wma5,
+                        current_price > bb_lower
+                    ])
+                    
+                    # Signal decision (minimum 4 points like bot3.py)
+                    if buy_score >= 4:
+                        signal = "BUY"
+                    elif sell_score >= 4:
+                        signal = "SELL"
+                    
                     if signal:
-                        self.logger.log(f"🚀 Executing {signal} trade...")
-                        try:
+                        self.logger.log(f"Signal: {signal} (Score: {buy_score if signal=='BUY' else sell_score})")
+                        
+                        # Calculate TP/SL (based on settings)
+                        if tp_unit == "percent" and sl_unit == "percent":
+                            # Use percent of balance like bot3.py
+                            account_info = mt5.account_info()
+                            if account_info and account_info.balance >= 1000:
+                                if signal == "BUY":
+                                    sl_price = current_price * (1 - sl_value / 100)
+                                    tp_price = current_price * (1 + tp_value / 100)
+                                else:
+                                    sl_price = current_price * (1 + sl_value / 100)
+                                    tp_price = current_price * (1 - tp_value / 100)
+                                
+                                # Execute order directly (like bot3.py)
+                                success = self._execute_direct_order(signal, symbol, lot_size, current_price, tp_price, sl_price)
+                                if success:
+                                    self.order_counter += 1
+                                    self.logger.log(f"✅ {signal} order placed successfully!")
+                                else:
+                                    self.logger.log(f"❌ Failed to place {signal} order")
+                            else:
+                                self.logger.log("Insufficient balance")
+                        else:
+                            # Use current complex TP/SL calculation
                             success = self._execute_strategy_trade(signal, current_price)
                             if success:
                                 self.order_counter += 1
-                                self.logger.log(f"💰 {signal} order executed successfully - REAL MONEY!")
-                            else:
-                                self.logger.log(f"❌ Failed to execute {signal} order")
-                                
-                        except Exception as trade_e:
-                            self.logger.log(f"❌ Trade execution error: {str(trade_e)}")
-                            error_count += 1
+                                self.logger.log(f"✅ {signal} order placed successfully!")
+                    else:
+                        self.logger.log("No valid signal, waiting...")
                     
-                    self.logger.log(f"✅ Trading cycle #{cycle_count} completed")        
                     time.sleep(interval)
                     
                 except Exception as e:
-                    error_count += 1
-                    self.logger.log(f"❌ ERROR in trading loop ({error_count}/{max_errors}): {str(e)}")
-                    
-                    # Stop if too many consecutive errors
-                    if error_count >= max_errors:
-                        self.logger.log("❌ Too many errors - stopping trading loop for safety")
-                        break
-                        
+                    self.logger.log(f"Error in cycle: {str(e)}")
                     time.sleep(interval)
                     
         except Exception as e:
-            self.logger.log(f"❌ CRITICAL ERROR in trading loop: {str(e)}")
-            import traceback
-            self.logger.log(f"🔧 FULL TRACEBACK: {traceback.format_exc()}")
+            self.logger.log(f"Critical error in trading loop: {str(e)}")
         finally:
             self.trading_running = False
-            self.logger.log("🔥 Trading loop ended")
+            self.logger.log("Trading loop ended")
             
         
     def _check_session_limits(self):
@@ -962,6 +933,40 @@ class TradingEngine:
             return len(positions) if positions else 0
         except:
             return 0
+    
+    def _execute_direct_order(self, signal: str, symbol: str, lot_size: float, price: float, tp: float, sl: float) -> bool:
+        """Execute order directly like bot3.py - simplified approach"""
+        try:
+            order_type = mt5.ORDER_TYPE_BUY if signal == "BUY" else mt5.ORDER_TYPE_SELL
+            
+            order_request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": lot_size,
+                "type": order_type,
+                "price": price,
+                "sl": sl,
+                "tp": tp,
+                "deviation": 20,
+                "magic": 123456,
+                "comment": f"Bot3 {signal}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+            
+            result = mt5.order_send(order_request)
+            
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.logger.log(f"Order {signal} success! Price: {price:.5f}")
+                return True
+            else:
+                error_code = result.retcode if result else "No result"
+                self.logger.log(f"Order {signal} failed: {error_code}")
+                return False
+                
+        except Exception as e:
+            self.logger.log(f"Direct order error: {str(e)}")
+            return False
             
     def _get_technical_indicators(self, symbol: str, strategy: str) -> Optional[Dict]:
         """Get technical indicators for analysis with enhanced debugging"""
