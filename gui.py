@@ -594,25 +594,71 @@ Lanjutkan SELL order?"""
             self.logger.log("Manual SELL order dibatalkan")
             
     def use_manual_symbol(self):
-        """Use manually entered symbol"""
+        """Use manually entered symbol with validation"""
         manual_symbol = self.manual_symbol_var.get().strip()
-        if manual_symbol:
-            if self.trading_engine.validate_symbol(manual_symbol):
-                self.symbol_var.set(manual_symbol)
-                self.logger.log(f"Using manual symbol: {manual_symbol}")
-            else:
-                messagebox.showerror("Error", f"Invalid symbol: {manual_symbol}")
-        else:
+        if not manual_symbol:
             messagebox.showwarning("Warning", "Please enter a symbol")
+            return
+            
+        if not self.trading_engine.is_connected():
+            messagebox.showerror("Error", "Please connect to MT5 first to validate symbol")
+            return
+            
+        def validate_async():
+            try:
+                is_valid = self.trading_engine.validate_symbol(manual_symbol)
+                self.root.after(0, self._handle_manual_symbol_result, manual_symbol, is_valid)
+            except Exception as e:
+                self.root.after(0, self._handle_manual_symbol_error, manual_symbol, str(e))
+        
+        self.logger.log(f"⏳ Validating manual symbol: {manual_symbol}")
+        threading.Thread(target=validate_async, daemon=True).start()
+        
+    def _handle_manual_symbol_result(self, symbol, is_valid):
+        """Handle manual symbol validation result"""
+        if is_valid:
+            self.symbol_var.set(symbol)
+            self.logger.log(f"✅ Using validated manual symbol: {symbol}")
+            messagebox.showinfo("Symbol Valid", f"✅ Symbol validated: {symbol}")
+        else:
+            self.logger.log(f"❌ Invalid symbol: {symbol}")
+            messagebox.showerror("Invalid Symbol", f"❌ Invalid symbol: {symbol}\n\nTry:\n• Check symbol spelling\n• Use symbols from MT5 Market Watch\n• Example: EURUSD, GBPUSD, XAUUSD")
+            
+    def _handle_manual_symbol_error(self, symbol, error_msg):
+        """Handle manual symbol validation error"""
+        self.logger.log(f"❌ Error validating {symbol}: {error_msg}")
+        messagebox.showerror("Validation Error", f"❌ Error validating {symbol}:\n\n{error_msg}")
             
     def auto_detect_symbol(self):
-        """Auto-detect active symbol"""
-        symbol = self.trading_engine.auto_detect_symbol()
+        """Auto-detect active symbol asynchronously"""
+        if not self.trading_engine.is_connected():
+            messagebox.showerror("Error", "Please connect to MT5 first")
+            return
+            
+        def detect_async():
+            try:
+                symbol = self.trading_engine.auto_detect_symbol()
+                self.root.after(0, self._handle_auto_detect_result, symbol)
+            except Exception as e:
+                self.root.after(0, self._handle_auto_detect_error, str(e))
+        
+        self.logger.log("⏳ Auto-detecting symbol...")
+        threading.Thread(target=detect_async, daemon=True).start()
+        
+    def _handle_auto_detect_result(self, symbol):
+        """Handle auto detect result in main thread"""
         if symbol:
             self.symbol_var.set(symbol)
-            self.logger.log(f"Auto-detected symbol: {symbol}")
+            self.logger.log(f"✅ Auto-detected symbol: {symbol}")
+            messagebox.showinfo("Symbol Detected", f"✅ Symbol detected: {symbol}")
         else:
-            messagebox.showwarning("Warning", "No active symbol detected")
+            self.logger.log("⚠️ No active symbol detected")
+            messagebox.showwarning("No Symbol Found", "⚠️ No active symbol detected\n\nTry:\n• Open a chart in MT5\n• Add symbols to Market Watch\n• Use manual symbol entry")
+            
+    def _handle_auto_detect_error(self, error_msg):
+        """Handle auto detect error in main thread"""
+        self.logger.log(f"❌ Auto detect error: {error_msg}")
+        messagebox.showerror("Auto Detect Error", f"❌ Error detecting symbol:\n\n{error_msg}")
             
     def on_strategy_change(self, event=None):
         """Handle strategy change"""
