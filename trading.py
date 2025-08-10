@@ -380,12 +380,42 @@ class TradingEngine:
             
         try:
             symbol = settings['symbol']
-            lot_size = settings['lot_size']
+            lot_size = float(settings['lot_size'])
+            
+            # Validate symbol and get symbol info
+            symbol_info = mt5.symbol_info(symbol)
+            if not symbol_info:
+                self.logger.log(f"❌ Symbol {symbol} not found")
+                return False
+                
+            # Check if trading is enabled for this symbol
+            if not symbol_info.trade_mode == mt5.SYMBOL_TRADE_MODE_FULL:
+                self.logger.log(f"❌ Trading disabled for {symbol}")
+                return False
+            
+            # Validate lot size against symbol requirements
+            min_lot = symbol_info.volume_min
+            max_lot = symbol_info.volume_max
+            lot_step = symbol_info.volume_step
+            
+            if lot_size < min_lot:
+                self.logger.log(f"❌ Lot size {lot_size} too small. Minimum: {min_lot}")
+                return False
+            elif lot_size > max_lot:
+                self.logger.log(f"❌ Lot size {lot_size} too large. Maximum: {max_lot}")
+                return False
+            
+            # Adjust lot size to step if needed
+            if lot_step > 0:
+                adjusted_lot = round(lot_size / lot_step) * lot_step
+                if adjusted_lot != lot_size:
+                    lot_size = adjusted_lot
+                    self.logger.log(f"⚠️ Lot size adjusted to {lot_size} (step: {lot_step})")
             
             # Get current price
             tick = mt5.symbol_info_tick(symbol)
             if not tick:
-                self.logger.log(f"ERROR: Cannot get price for {symbol}")
+                self.logger.log(f"❌ Cannot get price for {symbol}")
                 return False
                 
             # Calculate TP and SL
@@ -418,7 +448,41 @@ class TradingEngine:
             result = mt5.order_send(request)
             
             if result.retcode != mt5.TRADE_RETCODE_DONE:
-                self.logger.log(f"ERROR: Manual {order_type} failed - {result.retcode}")
+                # Provide detailed error messages for common error codes
+                error_messages = {
+                    10004: "TRADE_RETCODE_REQUOTE - Price has changed",
+                    10006: "TRADE_RETCODE_REJECT - Trade rejected",
+                    10007: "TRADE_RETCODE_CANCEL - Trade canceled", 
+                    10008: "TRADE_RETCODE_PLACED - Order placed",
+                    10009: "TRADE_RETCODE_DONE_PARTIAL - Partial execution",
+                    10010: "TRADE_RETCODE_ERROR - Common error",
+                    10011: "TRADE_RETCODE_TIMEOUT - Request timeout",
+                    10012: "TRADE_RETCODE_INVALID - Invalid request",
+                    10013: "TRADE_RETCODE_INVALID_VOLUME - Invalid volume (lot size)",
+                    10014: "TRADE_RETCODE_INVALID_PRICE - Invalid price",
+                    10015: "TRADE_RETCODE_INVALID_STOPS - Invalid stop levels",
+                    10016: "TRADE_RETCODE_TRADE_DISABLED - Trading disabled for symbol",
+                    10017: "TRADE_RETCODE_MARKET_CLOSED - Market is closed",
+                    10018: "TRADE_RETCODE_NO_MONEY - Not enough money",
+                    10019: "TRADE_RETCODE_POSITION_CLOSED - Position closed",
+                    10020: "TRADE_RETCODE_INVALID_EXPIRATION - Invalid expiration",
+                    10021: "TRADE_RETCODE_ORDER_CHANGED - Order changed",
+                    10025: "TRADE_RETCODE_TOO_MANY_REQUESTS - Too many requests"
+                }
+                
+                error_desc = error_messages.get(result.retcode, f"Unknown error code {result.retcode}")
+                self.logger.log(f"❌ Manual {order_type} failed: {error_desc}")
+                
+                # Additional info for common errors
+                if result.retcode == 10016:  # TRADE_DISABLED
+                    self.logger.log(f"⚠️ Trading disabled for {symbol} - check broker settings or market hours")
+                elif result.retcode == 10013:  # INVALID_VOLUME
+                    self.logger.log(f"⚠️ Invalid lot size {lot_size} for {symbol} - check minimum lot size")
+                elif result.retcode == 10018:  # NO_MONEY
+                    self.logger.log("⚠️ Insufficient balance for this trade")
+                elif result.retcode == 10017:  # MARKET_CLOSED
+                    self.logger.log(f"⚠️ Market closed for {symbol}")
+                
                 return False
             else:
                 self.logger.log(f"Manual {order_type} order successful at {price:.5f}")
@@ -939,18 +1003,50 @@ class TradingEngine:
         return None
         
     def _execute_strategy_trade(self, signal: str, price: float) -> bool:
-        """Execute trade based on strategy signal"""
+        """Execute trade based on strategy signal with enhanced validation"""
         try:
+            symbol = self.current_settings['symbol']
+            
             # Check account balance
             account_info = self.get_account_info()
             if not account_info or account_info['balance'] < self.min_balance:
-                self.logger.log("Insufficient balance for trading")
+                self.logger.log("❌ Insufficient balance for trading")
+                return False
+            
+            # Validate symbol and get symbol info
+            symbol_info = mt5.symbol_info(symbol)
+            if not symbol_info:
+                self.logger.log(f"❌ Symbol {symbol} not found for auto trading")
                 return False
                 
-            # Calculate lot size
-            lot_size = self.current_settings['lot_size']
+            # Check if trading is enabled for this symbol
+            if not symbol_info.trade_mode == mt5.SYMBOL_TRADE_MODE_FULL:
+                self.logger.log(f"❌ Auto trading disabled for {symbol}")
+                return False
+                
+            # Calculate and validate lot size
+            lot_size = float(self.current_settings['lot_size'])
             if self.current_settings.get('auto_lot', False):
                 lot_size = self._calculate_auto_lot()
+            
+            # Validate lot size against symbol requirements
+            min_lot = symbol_info.volume_min
+            max_lot = symbol_info.volume_max
+            lot_step = symbol_info.volume_step
+            
+            if lot_size < min_lot:
+                self.logger.log(f"❌ Auto lot size {lot_size} too small. Using minimum: {min_lot}")
+                lot_size = min_lot
+            elif lot_size > max_lot:
+                self.logger.log(f"❌ Auto lot size {lot_size} too large. Using maximum: {max_lot}")
+                lot_size = max_lot
+            
+            # Adjust lot size to step if needed
+            if lot_step > 0:
+                adjusted_lot = round(lot_size / lot_step) * lot_step
+                if adjusted_lot != lot_size:
+                    lot_size = adjusted_lot
+                    self.logger.log(f"⚠️ Auto lot size adjusted to {lot_size} (step: {lot_step})")
                 
             # Calculate TP and SL
             if signal == "BUY":
@@ -963,7 +1059,7 @@ class TradingEngine:
             # Create order request
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": self.current_settings['symbol'],
+                "symbol": symbol,
                 "volume": lot_size,
                 "type": order_type,
                 "price": price,
@@ -976,13 +1072,25 @@ class TradingEngine:
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
             
-            # Send order
+            # Send order with detailed error handling
             result = mt5.order_send(request)
             
-            return result.retcode == mt5.TRADE_RETCODE_DONE
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                error_messages = {
+                    10013: "Invalid volume (lot size)",
+                    10016: "Trading disabled for symbol", 
+                    10017: "Market is closed",
+                    10018: "Not enough money"
+                }
+                error_desc = error_messages.get(result.retcode, f"Error code {result.retcode}")
+                self.logger.log(f"❌ Auto {signal} failed: {error_desc}")
+                return False
+            else:
+                self.logger.log(f"✅ Auto {signal} executed at {price:.5f} with lot {lot_size}")
+                return True
             
         except Exception as e:
-            self.logger.log(f"ERROR executing trade: {str(e)}")
+            self.logger.log(f"❌ CRITICAL: Error executing auto trade: {str(e)}")
             return False
             
     def _calculate_auto_lot(self) -> float:
