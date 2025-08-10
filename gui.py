@@ -470,11 +470,16 @@ Lanjutkan trading dengan settings ini?"""
         # Start trading asynchronously to prevent GUI freezing
         def start_trading_async():
             try:
+                self.logger.log("🔍 Debug: About to call trading_engine.start_trading...")
                 success = self.trading_engine.start_trading(settings)
+                self.logger.log(f"🔍 Debug: start_trading returned: {success}")
                 # Use root.after to safely update GUI from thread
                 self.root.after(0, self._handle_start_result, success)
             except Exception as e:
                 error_msg = str(e)
+                self.logger.log(f"❌ CRITICAL: Exception in start_trading_async: {error_msg}")
+                import traceback
+                self.logger.log(f"🔧 Full traceback: {traceback.format_exc()}")
                 self.root.after(0, self._handle_start_error, error_msg)
         
         # Show immediate feedback

@@ -699,9 +699,21 @@ class TradingEngine:
                     else:
                         sl = price + (pips_needed * point * 10)
                         
-            # Round to symbol digits
-            tp = round(tp, digits) if tp > 0 else 0
-            sl = round(sl, digits) if sl > 0 else 0
+            # Round to symbol digits and ensure valid values
+            if tp > 0:
+                tp = round(tp, digits)
+            else:
+                tp = 0
+                
+            if sl > 0:
+                sl = round(sl, digits)
+            else:
+                # For invalid SL, use fallback calculation
+                if order_type == "BUY":
+                    sl = round(price - (10 * point * 10), digits)  # 10 pips default
+                else:
+                    sl = round(price + (10 * point * 10), digits)
+                self.logger.log(f"⚠️ Using fallback SL: {sl}")
             
             return tp, sl
             
@@ -862,7 +874,10 @@ class TradingEngine:
                     # Get technical indicators with comprehensive error handling
                     self.logger.log(f"📊 Getting technical indicators for {symbol}...")
                     try:
+                        self.logger.log(f"🔍 Debug: About to call _get_technical_indicators...")
                         indicators = self._get_technical_indicators(symbol, strategy)
+                        self.logger.log(f"🔍 Debug: _get_technical_indicators returned: {type(indicators)}")
+                        
                         if not indicators:
                             self.logger.log("⚠️ Cannot get technical indicators - retrying next cycle")
                             time.sleep(interval)
@@ -871,7 +886,9 @@ class TradingEngine:
                         self.logger.log(f"✅ Technical indicators loaded successfully")
                         
                     except Exception as ind_e:
-                        self.logger.log(f"❌ Indicator calculation error: {str(ind_e)}")
+                        self.logger.log(f"❌ CRITICAL: Indicator calculation error: {str(ind_e)}")
+                        import traceback
+                        self.logger.log(f"🔧 Full traceback: {traceback.format_exc()}")
                         error_count += 1
                         time.sleep(interval)
                         continue
@@ -923,6 +940,8 @@ class TradingEngine:
                     
         except Exception as e:
             self.logger.log(f"❌ CRITICAL ERROR in trading loop: {str(e)}")
+            import traceback
+            self.logger.log(f"🔧 FULL TRACEBACK: {traceback.format_exc()}")
         finally:
             self.trading_running = False
             self.logger.log("🔥 Trading loop ended")
@@ -947,20 +966,45 @@ class TradingEngine:
     def _get_technical_indicators(self, symbol: str, strategy: str) -> Optional[Dict]:
         """Get technical indicators for analysis with enhanced debugging"""
         try:
+            self.logger.log(f"🔍 Debug: Entering _get_technical_indicators for {symbol}")
+            
             strategy_config = self.strategy_configs.get(strategy, {})
             timeframe = strategy_config.get('timeframe', mt5.TIMEFRAME_M1)
             
             self.logger.log(f"🔄 Loading indicators for {symbol} on {timeframe} timeframe...")
             
-            # Get different periods of data for various indicators
+            # Get different periods of data for various indicators with detailed logging
+            self.logger.log(f"🔍 Debug: Calculating MA10...")
             ma10 = self._get_ma(symbol, 10, timeframe)
+            self.logger.log(f"🔍 Debug: MA10 result: {ma10}")
+            
+            self.logger.log(f"🔍 Debug: Calculating EMA9...")
             ema9 = self._get_ema(symbol, 9, timeframe)
+            self.logger.log(f"🔍 Debug: EMA9 result: {ema9}")
+            
+            self.logger.log(f"🔍 Debug: Calculating EMA21...")
             ema21 = self._get_ema(symbol, 21, timeframe)
+            self.logger.log(f"🔍 Debug: EMA21 result: {ema21}")
+            
+            self.logger.log(f"🔍 Debug: Calculating EMA50...")
             ema50 = self._get_ema(symbol, 50, timeframe)
+            self.logger.log(f"🔍 Debug: EMA50 result: {ema50}")
+            
+            self.logger.log(f"🔍 Debug: Calculating WMA5...")
             wma5 = self._get_wma(symbol, 5, timeframe)
+            self.logger.log(f"🔍 Debug: WMA5 result: {wma5}")
+            
+            self.logger.log(f"🔍 Debug: Calculating WMA10...")
             wma10 = self._get_wma(symbol, 10, timeframe)
+            self.logger.log(f"🔍 Debug: WMA10 result: {wma10}")
+            
+            self.logger.log(f"🔍 Debug: Calculating RSI...")
             rsi = self._get_rsi(symbol, 14, timeframe)
+            self.logger.log(f"🔍 Debug: RSI result: {rsi}")
+            
+            self.logger.log(f"🔍 Debug: Calculating Bollinger Bands...")
             bb_upper, bb_lower = self._get_bollinger_bands(symbol, 20, timeframe)
+            self.logger.log(f"🔍 Debug: BB results: upper={bb_upper}, lower={bb_lower}")
             
             # Debug which indicators failed
             failed_indicators = []
@@ -992,6 +1036,8 @@ class TradingEngine:
             
         except Exception as e:
             self.logger.log(f"❌ CRITICAL: Error getting indicators for {symbol}: {str(e)}")
+            import traceback
+            self.logger.log(f"🔧 Full traceback: {traceback.format_exc()}")
             return None
             
     def _get_ma(self, symbol: str, period: int, timeframe) -> Optional[float]:
