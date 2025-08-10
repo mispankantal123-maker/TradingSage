@@ -543,13 +543,25 @@ class TradingEngine:
             return False
             
     def calculate_tp_sl(self, price: float, order_type: str, settings: Dict) -> tuple:
-        """Calculate Take Profit and Stop Loss based on settings"""
+        """Calculate Take Profit and Stop Loss based on settings with enhanced debugging"""
         try:
-            tp_value = settings['tp_value']
-            sl_value = settings['sl_value']
-            tp_unit = settings['tp_unit']
-            sl_unit = settings['sl_unit']
-            symbol = settings['symbol']
+            tp_value = float(settings.get('tp_value', 20))
+            sl_value = float(settings.get('sl_value', 10))
+            tp_unit = settings.get('tp_unit', 'pips')
+            sl_unit = settings.get('sl_unit', 'pips')
+            symbol = settings.get('symbol', 'EURUSD')
+            
+            self.logger.log(f"🔧 Calculating TP/SL: {order_type} {symbol} at {price}")
+            self.logger.log(f"📋 Settings: TP={tp_value} {tp_unit}, SL={sl_value} {sl_unit}")
+            
+            # Validate inputs
+            if not tp_unit in ['pips', 'price', 'percent', 'money']:
+                self.logger.log(f"⚠️ Invalid TP unit '{tp_unit}', defaulting to pips")
+                tp_unit = 'pips'
+                
+            if not sl_unit in ['pips', 'price', 'percent', 'money']:
+                self.logger.log(f"⚠️ Invalid SL unit '{sl_unit}', defaulting to pips")  
+                sl_unit = 'pips'
             
             # Get symbol info for calculations
             symbol_info = mt5.symbol_info(symbol)
@@ -571,10 +583,17 @@ class TradingEngine:
             elif tp_unit == "price":
                 tp = tp_value
             elif tp_unit == "percent":
+                # Add validation for percent values
+                if tp_value <= 0 or tp_value > 100:
+                    self.logger.log(f"⚠️ Invalid TP percent value: {tp_value}%, using default 2%")
+                    tp_value = 2.0
+                
                 if order_type == "BUY":
                     tp = price * (1 + tp_value / 100)
                 else:
                     tp = price * (1 - tp_value / 100)
+                    
+                self.logger.log(f"📊 TP calculated: {order_type} at {price} with {tp_value}% = {tp}")
             elif tp_unit == "money":
                 # Simplified money calculation (would need more complex logic for accuracy)
                 pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
@@ -594,10 +613,17 @@ class TradingEngine:
             elif sl_unit == "price":
                 sl = sl_value
             elif sl_unit == "percent":
+                # Add validation for percent values  
+                if sl_value <= 0 or sl_value > 100:
+                    self.logger.log(f"⚠️ Invalid SL percent value: {sl_value}%, using default 1%")
+                    sl_value = 1.0
+                
                 if order_type == "BUY":
                     sl = price * (1 - sl_value / 100)
                 else:
                     sl = price * (1 + sl_value / 100)
+                    
+                self.logger.log(f"📊 SL calculated: {order_type} at {price} with {sl_value}% = {sl}")
             elif sl_unit == "money":
                 # Simplified money calculation
                 pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
