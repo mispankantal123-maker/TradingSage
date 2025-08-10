@@ -434,12 +434,30 @@ Lanjutkan trading dengan settings ini?"""
             self.logger.log("Trading dibatalkan pada konfirmasi settings")
             return
         
-        # Start trading
-        success = self.trading_engine.start_trading(settings)
-        if success:
-            self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
-        else:
-            messagebox.showerror("Error", "Failed to start trading")
+        # Start trading with better error handling
+        try:
+            success = self.trading_engine.start_trading(settings)
+            if success:
+                self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
+                messagebox.showinfo("Trading Started", "✅ Automated trading started successfully!\n\n⚠️ REAL MONEY mode active!\nMonitor carefully!")
+            else:
+                error_msg = """❌ Failed to start automated trading!
+
+Possible issues:
+• MT5 not connected properly
+• Invalid trading settings
+• Market is closed
+• Check logs for details
+
+Try:
+1. Reconnect to MT5
+2. Verify symbol is tradeable
+3. Check lot size and TP/SL values"""
+                messagebox.showerror("Trading Start Failed", error_msg)
+                
+        except Exception as e:
+            self.logger.log(f"❌ CRITICAL: Exception in start_trading: {str(e)}")
+            messagebox.showerror("Critical Error", f"Unexpected error starting trading:\n\n{str(e)}\n\nCheck logs for details")
             
     def stop_trading(self):
         """Stop automated trading"""

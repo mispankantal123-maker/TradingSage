@@ -263,28 +263,58 @@ class TradingEngine:
         return self.strategy_configs.get(strategy, {})
         
     def start_trading(self, settings: Dict) -> bool:
-        """Start automated trading"""
-        if self.trading_running:
-            self.logger.log("Trading is already running")
-            return False
+        """Start automated trading with enhanced error handling"""
+        try:
+            if self.trading_running:
+                self.logger.log("⚠️ Trading is already running")
+                return False
+                
+            if not self.is_mt5_connected:
+                self.logger.log("❌ ERROR: MT5 not connected - cannot start trading")
+                return False
+                
+            # Double check MT5 connection
+            try:
+                # Try to access MT5 functions to verify real connection
+                account_info = mt5.account_info()
+                if not account_info:
+                    self.logger.log("❌ ERROR: MT5 connection invalid")
+                    self.is_mt5_connected = False
+                    return False
+                    
+                self.logger.log(f"✅ MT5 connected - Account: {account_info.login}")
+                
+            except Exception as e:
+                self.logger.log(f"❌ ERROR: Cannot access MT5: {str(e)}")
+                self.is_mt5_connected = False
+                return False
+                
+            # Validate settings
+            if not self.validate_trading_settings(settings):
+                self.logger.log("❌ ERROR: Invalid trading settings")
+                return False
+                
+            self.current_settings = settings.copy()
+            self.trading_running = True
             
-        if not self.is_mt5_connected:
-            self.logger.log("ERROR: MT5 not connected")
+            # Start trading thread with error handling
+            try:
+                self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
+                self.trading_thread.start()
+                
+                self.logger.log(f"🔥 Started {settings['strategy']} trading for {settings['symbol']}")
+                self.logger.log(f"⚠️ WARNING: REAL MONEY TRADING ACTIVE!")
+                return True
+                
+            except Exception as e:
+                self.logger.log(f"❌ ERROR starting trading thread: {str(e)}")
+                self.trading_running = False
+                return False
+                
+        except Exception as e:
+            self.logger.log(f"❌ CRITICAL ERROR in start_trading: {str(e)}")
+            self.trading_running = False
             return False
-            
-        # Validate settings
-        if not self.validate_trading_settings(settings):
-            return False
-            
-        self.current_settings = settings.copy()
-        self.trading_running = True
-        
-        # Start trading thread
-        self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
-        self.trading_thread.start()
-        
-        self.logger.log(f"Started {settings['strategy']} trading for {settings['symbol']}")
-        return True
         
     def stop_trading(self):
         """Stop automated trading"""
@@ -482,69 +512,100 @@ class TradingEngine:
             
     def _trading_loop(self):
         """Main trading loop running in separate thread"""
-        strategy = self.current_settings['strategy']
-        symbol = self.current_settings['symbol']
-        interval = self.current_settings.get('interval', 10)
-        
-        self.logger.log(f"Trading loop started for {strategy} on {symbol}")
-        
-        last_price = None
-        
-        while self.trading_running:
-            try:
-                # Check session limits
-                self._check_session_limits()
+        try:
+            # First check if MT5 is available
+            if not self.is_mt5_connected:
+                self.logger.log("❌ ERROR: MT5 not connected - cannot start trading loop")
+                self.trading_running = False
+                return
                 
-                # Check if max orders reached
-                if self._get_open_positions_count() >= self.max_orders_per_session:
-                    self.logger.log("Maximum orders reached, waiting...")
-                    time.sleep(interval)
-                    continue
-                    
-                # Get current price
-                tick = mt5.symbol_info_tick(symbol)
-                if not tick or tick.ask == 0.0:
-                    self.logger.log("Cannot get current price")
-                    time.sleep(interval)
-                    continue
-                    
-                current_price = tick.ask
-                
-                # Check for price spikes
-                if last_price and abs(current_price - last_price) > self.price_spike_threshold:
-                    self.logger.log("Price spike detected, skipping cycle")
-                    last_price = current_price
-                    time.sleep(interval)
-                    continue
-                    
-                last_price = current_price
-                
-                # Get technical indicators
-                indicators = self._get_technical_indicators(symbol, strategy)
-                if not indicators:
-                    self.logger.log("Cannot get technical indicators")
-                    time.sleep(interval)
-                    continue
-                    
-                # Generate trading signal
-                signal = self._generate_signal(strategy, current_price, indicators)
-                
-                if signal:
-                    # Execute trade
-                    success = self._execute_strategy_trade(signal, current_price)
-                    if success:
-                        self.order_counter += 1
-                        self.logger.log(f"{signal} order executed successfully")
-                    else:
-                        self.logger.log(f"Failed to execute {signal} order")
+            strategy = self.current_settings['strategy']
+            symbol = self.current_settings['symbol']
+            interval = self.current_settings.get('interval', 10)
+            
+            self.logger.log(f"🔥 Trading loop started for {strategy} on {symbol}")
+            self.logger.log(f"⚠️ WARNING: This is REAL MONEY trading!")
+            
+            last_price = None
+            error_count = 0
+            max_errors = 10
+            
+            while self.trading_running:
+                try:
+                    # Reset error count on successful cycle
+                    if error_count > 0:
+                        error_count = 0
                         
-                time.sleep(interval)
-                
-            except Exception as e:
-                self.logger.log(f"ERROR in trading loop: {str(e)}")
-                time.sleep(interval)
-                
-        self.logger.log("Trading loop ended")
+                    # Check if still connected to MT5
+                    if not self.is_mt5_connected:
+                        self.logger.log("❌ MT5 connection lost - stopping trading")
+                        break
+                        
+                    # Check session limits
+                    self._check_session_limits()
+                    
+                    # Check if max orders reached
+                    if self._get_open_positions_count() >= self.max_orders_per_session:
+                        self.logger.log("⚠️ Maximum orders reached, waiting...")
+                        time.sleep(interval)
+                        continue
+                        
+                    # Get current price
+                    tick = mt5.symbol_info_tick(symbol)
+                    if not tick or tick.ask == 0.0:
+                        self.logger.log(f"⚠️ Cannot get current price for {symbol}")
+                        time.sleep(interval)
+                        continue
+                        
+                    current_price = tick.ask
+                    
+                    # Check for price spikes
+                    if last_price and abs(current_price - last_price) > self.price_spike_threshold:
+                        self.logger.log("⚠️ Price spike detected, skipping cycle")
+                        last_price = current_price
+                        time.sleep(interval)
+                        continue
+                        
+                    last_price = current_price
+                    
+                    # Get technical indicators
+                    indicators = self._get_technical_indicators(symbol, strategy)
+                    if not indicators:
+                        self.logger.log("⚠️ Cannot get technical indicators - market might be closed")
+                        time.sleep(interval)
+                        continue
+                        
+                    # Generate trading signal
+                    signal = self._generate_signal(strategy, current_price, indicators)
+                    
+                    if signal:
+                        # Execute trade
+                        success = self._execute_strategy_trade(signal, current_price)
+                        if success:
+                            self.order_counter += 1
+                            self.logger.log(f"💰 {signal} order executed successfully - REAL MONEY!")
+                        else:
+                            self.logger.log(f"❌ Failed to execute {signal} order")
+                            
+                    time.sleep(interval)
+                    
+                except Exception as e:
+                    error_count += 1
+                    self.logger.log(f"❌ ERROR in trading loop ({error_count}/{max_errors}): {str(e)}")
+                    
+                    # Stop if too many consecutive errors
+                    if error_count >= max_errors:
+                        self.logger.log("❌ Too many errors - stopping trading loop for safety")
+                        break
+                        
+                    time.sleep(interval)
+                    
+        except Exception as e:
+            self.logger.log(f"❌ CRITICAL ERROR in trading loop: {str(e)}")
+        finally:
+            self.trading_running = False
+            self.logger.log("🔥 Trading loop ended")
+            
         
     def _check_session_limits(self):
         """Check and reset session limits"""
