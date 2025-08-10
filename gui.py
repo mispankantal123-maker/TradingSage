@@ -470,22 +470,22 @@ Lanjutkan trading dengan settings ini?"""
         # Immediate success feedback like bot3.py
         self.logger.log("Starting automated trading...")
         
-        # Start trading with immediate GUI update (bot3.py approach)
-        try:
-            # Call start_trading directly but quickly
-            success = self.trading_engine.start_trading(settings)
-            
-            if success:
-                self.logger.log("REAL MONEY TRADING STARTED!")
-                # Update GUI immediately
-                self.root.after(100, lambda: messagebox.showinfo("Trading Started", 
-                    "✅ Automated trading started!\n\n⚠️ REAL MONEY mode active!"))
-            else:
-                self.logger.log("Failed to start trading")
-                messagebox.showerror("Error", "Failed to start trading. Check connection.")
-        except Exception as e:
-            self.logger.log(f"Error: {str(e)}")
-            messagebox.showerror("Error", f"Error starting trading: {str(e)}")
+        # Ultra simple approach - immediate execution
+        self.logger.log("Starting trading immediately...")
+        
+        # Set flag and start thread directly (no validation)
+        self.trading_engine.trading_running = True
+        self.trading_engine.current_settings = settings.copy()
+        
+        # Start thread immediately
+        self.trading_engine.trading_thread = threading.Thread(
+            target=self.trading_engine._trading_loop, daemon=True
+        )
+        self.trading_engine.trading_thread.start()
+        
+        # Immediate feedback
+        self.logger.log("REAL MONEY TRADING STARTED!")
+        messagebox.showinfo("Started", "Trading started successfully!")
         
     def _handle_start_result(self, success):
         """Handle trading start result in main thread"""
