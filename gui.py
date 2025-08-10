@@ -264,54 +264,93 @@ class TradingBotGUI:
     def start_status_updates(self):
         """Start thread for updating status information"""
         def update_status():
+            error_count = 0
+            max_errors = 5
+            
             while True:
                 try:
                     # Update connection status
                     if self.trading_engine.is_connected():
-                        self.connection_status_var.set("Connected")
-                        self.connection_label.configure(foreground="green")
-                        self.connect_btn.configure(state=tk.DISABLED)
-                        self.disconnect_btn.configure(state=tk.NORMAL)
-                        
-                        # Update account info
-                        account_info = self.trading_engine.get_account_info()
-                        if account_info:
-                            self.account_info_var.set(
-                                f"Account: {account_info['login']} | Balance: ${account_info['balance']:.2f} | "
-                                f"Equity: ${account_info['equity']:.2f}"
-                            )
+                        self.root.after(0, self._update_connected_status)
                     else:
-                        self.connection_status_var.set("Disconnected")
-                        self.connection_label.configure(foreground="red")
-                        self.connect_btn.configure(state=tk.NORMAL)
-                        self.disconnect_btn.configure(state=tk.DISABLED)
-                        self.account_info_var.set("No account info")
+                        self.root.after(0, self._update_disconnected_status)
                     
                     # Update trading status
                     if self.trading_engine.is_running():
-                        self.trading_status_var.set("Running")
-                        self.trading_label.configure(foreground="green")
-                        self.start_btn.configure(state=tk.DISABLED)
-                        self.stop_btn.configure(state=tk.NORMAL)
+                        self.root.after(0, self._update_trading_running)
                     else:
-                        self.trading_status_var.set("Stopped")
-                        self.trading_label.configure(foreground="red")
-                        self.start_btn.configure(state=tk.NORMAL)
-                        self.stop_btn.configure(state=tk.DISABLED)
+                        self.root.after(0, self._update_trading_stopped)
                     
                     # Update symbol list if connected
                     if self.trading_engine.is_connected():
-                        symbols = self.trading_engine.get_symbols()
-                        if symbols:
-                            self.symbol_combo.configure(values=symbols)
+                        try:
+                            symbols = self.trading_engine.get_symbols()
+                            if symbols:
+                                self.root.after(0, lambda: self.symbol_combo.configure(values=symbols))
+                        except:
+                            pass
                             
+                    error_count = 0  # Reset error count on success
+                    
                 except Exception as e:
-                    pass  # Continue silently on errors
+                    error_count += 1
+                    if error_count >= max_errors:
+                        self.logger.log(f"Status update thread stopped after {max_errors} errors")
+                        break
                 
-                time.sleep(1)  # Update every second
+                time.sleep(2)  # Update every 2 seconds to reduce load
         
         status_thread = threading.Thread(target=update_status, daemon=True)
         status_thread.start()
+        
+    def _update_connected_status(self):
+        """Update GUI for connected status - called from main thread"""
+        try:
+            self.connection_status_var.set("Connected")
+            self.connection_label.configure(foreground="green")
+            self.connect_btn.configure(state=tk.DISABLED)
+            self.disconnect_btn.configure(state=tk.NORMAL)
+            
+            # Update account info
+            account_info = self.trading_engine.get_account_info()
+            if account_info:
+                self.account_info_var.set(
+                    f"Account: {account_info['login']} | Balance: ${account_info['balance']:.2f} | "
+                    f"Equity: ${account_info['equity']:.2f}"
+                )
+        except Exception as e:
+            self.logger.log(f"Error updating connected status: {str(e)}")
+            
+    def _update_disconnected_status(self):
+        """Update GUI for disconnected status - called from main thread"""
+        try:
+            self.connection_status_var.set("Disconnected")
+            self.connection_label.configure(foreground="red")
+            self.connect_btn.configure(state=tk.NORMAL)
+            self.disconnect_btn.configure(state=tk.DISABLED)
+            self.account_info_var.set("No account info")
+        except Exception as e:
+            self.logger.log(f"Error updating disconnected status: {str(e)}")
+            
+    def _update_trading_running(self):
+        """Update GUI for trading running status - called from main thread"""
+        try:
+            self.trading_status_var.set("Running")
+            self.trading_label.configure(foreground="green")
+            self.start_btn.configure(state=tk.DISABLED)
+            self.stop_btn.configure(state=tk.NORMAL)
+        except Exception as e:
+            self.logger.log(f"Error updating trading running status: {str(e)}")
+            
+    def _update_trading_stopped(self):
+        """Update GUI for trading stopped status - called from main thread"""
+        try:
+            self.trading_status_var.set("Stopped")
+            self.trading_label.configure(foreground="red")
+            self.start_btn.configure(state=tk.NORMAL)
+            self.stop_btn.configure(state=tk.DISABLED)
+        except Exception as e:
+            self.logger.log(f"Error updating trading stopped status: {str(e)}")
         
     # Event handlers
     def connect_mt5(self):
@@ -406,23 +445,109 @@ class TradingBotGUI:
             
     def toggle_auto_lot(self):
         """Toggle auto lot calculation"""
-        # Implementation for auto lot toggle
-        pass
+        try:
+            if self.auto_lot_var.get():
+                # Auto lot is enabled - calculate based on risk percentage
+                self.calculate_auto_lot()
+                self.logger.log("Auto lot calculation enabled")
+            else:
+                # Manual lot entry enabled
+                self.logger.log("Manual lot entry enabled")
+                
+        except Exception as e:
+            self.logger.log(f"ERROR in auto lot toggle: {str(e)}")
+            
+    def calculate_auto_lot(self):
+        """Calculate lot size based on risk percentage and account balance"""
+        try:
+            if not self.trading_engine.is_connected():
+                return
+                
+            account_info = self.trading_engine.get_account_info()
+            if not account_info:
+                return
+                
+            balance = account_info['balance']
+            risk_percent = float(self.risk_percent_var.get()) if self.risk_percent_var.get() else 2.0
+            sl_pips = float(self.sl_value_var.get()) if self.sl_value_var.get() else 10
+            
+            # Calculate risk amount in money
+            risk_amount = balance * (risk_percent / 100)
+            
+            # Get symbol info for pip value calculation
+            symbol = self.symbol_var.get()
+            symbol_info = self.trading_engine.get_symbol_info(symbol)
+            
+            if symbol_info:
+                # Simplified pip value calculation (assumes standard forex pair)
+                pip_value = 10  # For standard lots in USD
+                
+                # Calculate lot size
+                calculated_lot = risk_amount / (sl_pips * pip_value)
+                
+                # Ensure minimum and maximum lot sizes
+                calculated_lot = max(0.01, min(calculated_lot, 10.0))
+                calculated_lot = round(calculated_lot, 2)
+                
+                self.lot_var.set(str(calculated_lot))
+                self.logger.log(f"Auto-calculated lot size: {calculated_lot} (Risk: {risk_percent}%)")
+            
+        except Exception as e:
+            self.logger.log(f"ERROR calculating auto lot: {str(e)}")
         
     def get_current_settings(self):
-        """Get current GUI settings as dictionary"""
-        return {
-            'strategy': self.strategy_var.get(),
-            'symbol': self.symbol_var.get(),
-            'lot_size': float(self.lot_var.get()) if self.lot_var.get() else 0.01,
-            'auto_lot': self.auto_lot_var.get(),
-            'risk_percent': float(self.risk_percent_var.get()) if self.risk_percent_var.get() else 2.0,
-            'tp_value': float(self.tp_value_var.get()) if self.tp_value_var.get() else 20,
-            'tp_unit': self.tp_unit_var.get(),
-            'sl_value': float(self.sl_value_var.get()) if self.sl_value_var.get() else 10,
-            'sl_unit': self.sl_unit_var.get(),
-            'interval': int(self.interval_var.get()) if self.interval_var.get() else 10
-        }
+        """Get current GUI settings as dictionary with proper validation"""
+        try:
+            # Validate and convert inputs with fallbacks
+            def safe_float(value, default):
+                try:
+                    return float(value) if value and str(value).strip() else default
+                except (ValueError, TypeError):
+                    return default
+                    
+            def safe_int(value, default):
+                try:
+                    return int(value) if value and str(value).strip() else default
+                except (ValueError, TypeError):
+                    return default
+            
+            settings = {
+                'strategy': self.strategy_var.get() or 'Scalping',
+                'symbol': self.symbol_var.get() or 'EURUSD',
+                'lot_size': safe_float(self.lot_var.get(), 0.01),
+                'auto_lot': self.auto_lot_var.get(),
+                'risk_percent': safe_float(self.risk_percent_var.get(), 2.0),
+                'tp_value': safe_float(self.tp_value_var.get(), 20),
+                'tp_unit': self.tp_unit_var.get() or 'pips',
+                'sl_value': safe_float(self.sl_value_var.get(), 10),
+                'sl_unit': self.sl_unit_var.get() or 'pips',
+                'interval': safe_int(self.interval_var.get(), 10)
+            }
+            
+            # Additional validation
+            settings['lot_size'] = max(0.01, min(settings['lot_size'], 1000))
+            settings['risk_percent'] = max(0.1, min(settings['risk_percent'], 20))
+            settings['tp_value'] = max(1, settings['tp_value'])
+            settings['sl_value'] = max(1, settings['sl_value'])
+            settings['interval'] = max(1, min(settings['interval'], 3600))
+            
+            return settings
+            
+        except Exception as e:
+            self.logger.log(f"ERROR in get_current_settings: {str(e)}")
+            # Return safe defaults
+            return {
+                'strategy': 'Scalping',
+                'symbol': 'EURUSD',
+                'lot_size': 0.01,
+                'auto_lot': False,
+                'risk_percent': 2.0,
+                'tp_value': 20,
+                'tp_unit': 'pips',
+                'sl_value': 10,
+                'sl_unit': 'pips',
+                'interval': 10
+            }
         
     def save_config(self):
         """Save current configuration"""

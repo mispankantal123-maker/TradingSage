@@ -235,6 +235,17 @@ class TradingEngine:
             self.logger.log(f"ERROR getting symbols: {str(e)}")
             return []
             
+    def get_symbol_info(self, symbol: str):
+        """Get detailed symbol information"""
+        if not self.is_mt5_connected:
+            return None
+            
+        try:
+            return mt5.symbol_info(symbol)
+        except Exception as e:
+            self.logger.log(f"ERROR getting symbol info for {symbol}: {str(e)}")
+            return None
+            
     def validate_symbol(self, symbol: str) -> bool:
         """Validate if symbol exists and is tradeable"""
         if not self.is_mt5_connected:
@@ -285,25 +296,47 @@ class TradingEngine:
     def auto_detect_symbol(self) -> Optional[str]:
         """Auto-detect currently active symbol"""
         if not self.is_mt5_connected:
+            self.logger.log("MT5 not connected - cannot auto-detect symbol")
             return None
             
         try:
             # Get all positions and orders to find active symbols
             positions = mt5.positions_get()
             if positions:
-                # Return symbol of first position
-                return positions[0].symbol
+                symbol = positions[0].symbol
+                self.logger.log(f"Active position found: {symbol}")
+                return symbol
                 
             # If no positions, try to get market watch symbols
             symbols = mt5.symbols_get()
             if symbols:
+                # Filter for commonly traded symbols first
+                priority_symbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'USDCAD', 'AUDUSD']
+                
+                # Check priority symbols first
+                for priority_symbol in priority_symbols:
+                    for symbol in symbols:
+                        if symbol.visible and symbol.name == priority_symbol:
+                            tick = mt5.symbol_info_tick(symbol.name)
+                            if tick and tick.ask > 0:
+                                self.logger.log(f"Priority symbol detected: {symbol.name}")
+                                return symbol.name
+                
+                # Then check any visible symbol
                 for symbol in symbols:
                     if symbol.visible:
-                        # Get recent tick to verify activity
                         tick = mt5.symbol_info_tick(symbol.name)
                         if tick and tick.ask > 0:
+                            self.logger.log(f"Available symbol detected: {symbol.name}")
                             return symbol.name
+            
+            # Fallback to most common symbol if nothing found
+            fallback_symbol = 'EURUSD'
+            if self.validate_symbol(fallback_symbol):
+                self.logger.log(f"Using fallback symbol: {fallback_symbol}")
+                return fallback_symbol
                             
+            self.logger.log("No active symbols detected")
             return None
             
         except Exception as e:
@@ -656,7 +689,7 @@ class TradingEngine:
             rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period)
             if rates is None or len(rates) < period:
                 return None
-            return np.mean([r['close'] for r in rates])
+            return float(np.mean([r['close'] for r in rates]))
         except:
             return None
             
@@ -669,7 +702,8 @@ class TradingEngine:
             prices = np.array([r['close'] for r in rates])
             weights = np.exp(np.linspace(-1., 0., period))
             weights /= weights.sum()
-            return np.convolve(prices, weights, mode='valid')[-1]
+            result = np.convolve(prices, weights, mode='valid')
+            return float(result[-1])
         except:
             return None
             
@@ -681,7 +715,7 @@ class TradingEngine:
                 return None
             prices = np.array([r['close'] for r in rates])
             weights = np.arange(1, period + 1)
-            return np.dot(prices, weights) / weights.sum()
+            return float(np.dot(prices, weights) / weights.sum())
         except:
             return None
             
@@ -695,12 +729,12 @@ class TradingEngine:
             delta = np.diff(close)
             gain = np.where(delta > 0, delta, 0)
             loss = np.where(delta < 0, -delta, 0)
-            avg_gain = np.mean(gain)
-            avg_loss = np.mean(loss)
+            avg_gain = float(np.mean(gain))
+            avg_loss = float(np.mean(loss))
             if avg_loss == 0:
-                return 100
+                return 100.0
             rs = avg_gain / avg_loss
-            return 100 - (100 / (1 + rs))
+            return float(100 - (100 / (1 + rs)))
         except:
             return None
             
