@@ -640,7 +640,7 @@ class TradingEngine:
             return 1  # Return default value
             
     def _trading_loop(self):
-        """Main trading loop running in separate thread"""
+        """Main trading loop running in separate thread with enhanced crash protection"""
         try:
             # First check if MT5 is available
             if not self.is_mt5_connected:
@@ -655,20 +655,39 @@ class TradingEngine:
             self.logger.log(f"🔥 Trading loop started for {strategy} on {symbol}")
             self.logger.log(f"⚠️ WARNING: This is REAL MONEY trading!")
             
+            # Initialize with safety defaults
             last_price = None
             error_count = 0
-            max_errors = 10
+            max_errors = 5  # Reduce max errors to fail faster
+            cycle_count = 0
             
             while self.trading_running:
                 try:
+                    cycle_count += 1
+                    self.logger.log(f"🔄 Trading cycle #{cycle_count} starting...")
+                    
                     # Reset error count on successful cycle
                     if error_count > 0:
                         error_count = 0
+                        self.logger.log("✅ Error count reset after successful cycle")
                         
-                    # Check if still connected to MT5
-                    if not self.is_mt5_connected:
-                        self.logger.log("❌ MT5 connection lost - stopping trading")
-                        break
+                    # Check if still connected to MT5 with timeout protection
+                    try:
+                        if not self.is_mt5_connected:
+                            self.logger.log("❌ MT5 connection lost - stopping trading")
+                            break
+                        
+                        # Quick connection test
+                        account_test = mt5.account_info()
+                        if not account_test:
+                            self.logger.log("❌ MT5 account info unavailable - stopping trading")
+                            break
+                            
+                    except Exception as conn_e:
+                        self.logger.log(f"❌ MT5 connection test failed: {str(conn_e)}")
+                        error_count += 1
+                        time.sleep(interval)
+                        continue
                         
                     # Check session limits
                     self._check_session_limits()
@@ -679,14 +698,23 @@ class TradingEngine:
                         time.sleep(interval)
                         continue
                         
-                    # Get current price
-                    tick = mt5.symbol_info_tick(symbol)
-                    if not tick or tick.ask == 0.0:
-                        self.logger.log(f"⚠️ Cannot get current price for {symbol}")
+                    # Get current price with error handling
+                    self.logger.log(f"📊 Getting current price for {symbol}...")
+                    try:
+                        tick = mt5.symbol_info_tick(symbol)
+                        if not tick or tick.ask == 0.0:
+                            self.logger.log(f"⚠️ Cannot get current price for {symbol} - retrying next cycle")
+                            time.sleep(interval)
+                            continue
+                            
+                        current_price = tick.ask
+                        self.logger.log(f"✅ Current price: {current_price}")
+                        
+                    except Exception as price_e:
+                        self.logger.log(f"❌ Price access error: {str(price_e)}")
+                        error_count += 1
                         time.sleep(interval)
                         continue
-                        
-                    current_price = tick.ask
                     
                     # Check for price spikes
                     if last_price and abs(current_price - last_price) > self.price_spike_threshold:
@@ -697,34 +725,55 @@ class TradingEngine:
                         
                     last_price = current_price
                     
-                    # Get technical indicators with timeout handling
+                    # Get technical indicators with comprehensive error handling
                     self.logger.log(f"📊 Getting technical indicators for {symbol}...")
-                    indicators = self._get_technical_indicators(symbol, strategy)
-                    if not indicators:
-                        self.logger.log("⚠️ Cannot get technical indicators - retrying next cycle")
+                    try:
+                        indicators = self._get_technical_indicators(symbol, strategy)
+                        if not indicators:
+                            self.logger.log("⚠️ Cannot get technical indicators - retrying next cycle")
+                            time.sleep(interval)
+                            continue
+                            
+                        self.logger.log(f"✅ Technical indicators loaded successfully")
+                        
+                    except Exception as ind_e:
+                        self.logger.log(f"❌ Indicator calculation error: {str(ind_e)}")
+                        error_count += 1
                         time.sleep(interval)
                         continue
-                        
-                    self.logger.log(f"✅ Technical indicators loaded successfully")
                     
-                    # Generate trading signal
+                    # Generate trading signal with error protection
                     self.logger.log(f"🔍 Analyzing {strategy} signals...")
-                    signal = self._generate_signal(strategy, current_price, indicators)
-                    
-                    if signal:
-                        self.logger.log(f"📈 {strategy} signal generated: {signal}")
-                    else:
-                        self.logger.log(f"💤 No {strategy} signal - waiting next cycle")
-                    
-                    if signal:
-                        # Execute trade
-                        success = self._execute_strategy_trade(signal, current_price)
-                        if success:
-                            self.order_counter += 1
-                            self.logger.log(f"💰 {signal} order executed successfully - REAL MONEY!")
+                    try:
+                        signal = self._generate_signal(strategy, current_price, indicators)
+                        
+                        if signal:
+                            self.logger.log(f"📈 {strategy} signal generated: {signal}")
                         else:
-                            self.logger.log(f"❌ Failed to execute {signal} order")
+                            self.logger.log(f"💤 No {strategy} signal - waiting next cycle")
                             
+                    except Exception as sig_e:
+                        self.logger.log(f"❌ Signal generation error: {str(sig_e)}")
+                        error_count += 1
+                        time.sleep(interval)
+                        continue
+                    
+                    # Execute trade if signal exists
+                    if signal:
+                        self.logger.log(f"🚀 Executing {signal} trade...")
+                        try:
+                            success = self._execute_strategy_trade(signal, current_price)
+                            if success:
+                                self.order_counter += 1
+                                self.logger.log(f"💰 {signal} order executed successfully - REAL MONEY!")
+                            else:
+                                self.logger.log(f"❌ Failed to execute {signal} order")
+                                
+                        except Exception as trade_e:
+                            self.logger.log(f"❌ Trade execution error: {str(trade_e)}")
+                            error_count += 1
+                    
+                    self.logger.log(f"✅ Trading cycle #{cycle_count} completed")        
                     time.sleep(interval)
                     
                 except Exception as e:
