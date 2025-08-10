@@ -289,15 +289,40 @@ class TradingEngine:
                 self.is_mt5_connected = False
                 return False
                 
-            # Validate settings
+            # Validate settings with detailed debugging
+            self.logger.log("🔄 Validating trading settings...")
             if not self.validate_trading_settings(settings):
                 self.logger.log("❌ ERROR: Invalid trading settings")
                 return False
-                
+            
+            self.logger.log("✅ Trading settings validated successfully")
             self.current_settings = settings.copy()
-            self.trading_running = True
+            
+            # Pre-check trading loop requirements
+            self.logger.log("🔄 Pre-checking trading requirements...")
+            try:
+                # Test symbol price access
+                tick = mt5.symbol_info_tick(settings['symbol'])
+                if not tick:
+                    self.logger.log(f"❌ Cannot access price data for {settings['symbol']}")
+                    return False
+                self.logger.log(f"✅ Symbol {settings['symbol']} price accessible: {tick.ask}")
+                
+                # Test basic indicator calculation to prevent crash
+                test_rates = mt5.copy_rates_from_pos(settings['symbol'], mt5.TIMEFRAME_M1, 0, 10)
+                if test_rates is None:
+                    self.logger.log(f"❌ Cannot access historical data for {settings['symbol']}")
+                    return False
+                self.logger.log(f"✅ Historical data accessible: {len(test_rates)} bars")
+                
+            except Exception as e:
+                self.logger.log(f"❌ Pre-check failed: {str(e)}")
+                return False
             
             # Start trading thread with error handling
+            self.logger.log("🔄 Starting trading thread...")
+            self.trading_running = True
+            
             try:
                 self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
                 self.trading_thread.start()
@@ -307,7 +332,7 @@ class TradingEngine:
                 return True
                 
             except Exception as e:
-                self.logger.log(f"❌ ERROR starting trading thread: {str(e)}")
+                self.logger.log(f"❌ CRITICAL: Error starting trading thread: {str(e)}")
                 self.trading_running = False
                 return False
                 
@@ -344,32 +369,57 @@ class TradingEngine:
             raise e
             
     def validate_trading_settings(self, settings: Dict) -> bool:
-        """Validate trading settings"""
+        """Validate trading settings with enhanced debugging"""
         try:
+            self.logger.log("🔍 Checking required fields...")
             # Check required fields
             required_fields = ['strategy', 'symbol', 'lot_size', 'tp_value', 'sl_value']
             for field in required_fields:
                 if field not in settings:
-                    self.logger.log(f"ERROR: Missing required field: {field}")
+                    self.logger.log(f"❌ Missing required field: {field}")
                     return False
+                self.logger.log(f"✅ Field {field}: {settings[field]}")
                     
-            # Validate symbol
-            if not self.validate_symbol(settings['symbol']):
+            # Validate symbol with timeout protection
+            self.logger.log(f"🔍 Validating symbol {settings['symbol']}...")
+            try:
+                if not self.validate_symbol(settings['symbol']):
+                    self.logger.log(f"❌ Symbol validation failed for {settings['symbol']}")
+                    return False
+                self.logger.log(f"✅ Symbol {settings['symbol']} validated")
+            except Exception as e:
+                self.logger.log(f"❌ Symbol validation error: {str(e)}")
                 return False
                 
             # Validate numeric values
-            if settings['lot_size'] <= 0:
-                self.logger.log("ERROR: Invalid lot size")
-                return False
+            self.logger.log("🔍 Validating numeric values...")
+            try:
+                lot_size = float(settings['lot_size'])
+                tp_value = float(settings['tp_value'])
+                sl_value = float(settings['sl_value'])
                 
-            if settings['tp_value'] <= 0 or settings['sl_value'] <= 0:
-                self.logger.log("ERROR: Invalid TP/SL values")
+                if lot_size <= 0:
+                    self.logger.log(f"❌ Invalid lot size: {lot_size}")
+                    return False
+                    
+                if tp_value <= 0:
+                    self.logger.log(f"❌ Invalid TP value: {tp_value}")
+                    return False
+                    
+                if sl_value <= 0:
+                    self.logger.log(f"❌ Invalid SL value: {sl_value}")
+                    return False
+                    
+                self.logger.log(f"✅ Numeric values valid - Lot: {lot_size}, TP: {tp_value}, SL: {sl_value}")
+                
+            except ValueError as e:
+                self.logger.log(f"❌ Invalid numeric format: {str(e)}")
                 return False
                 
             return True
             
         except Exception as e:
-            self.logger.log(f"ERROR validating settings: {str(e)}")
+            self.logger.log(f"❌ CRITICAL: Settings validation error: {str(e)}")
             return False
             
     def place_manual_order(self, order_type: str, settings: Dict) -> bool:

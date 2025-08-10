@@ -22,6 +22,8 @@ Preferred communication style: Simple, everyday language.
 - **✅ LATEST FIX**: Enhanced technical indicators with robust error handling and debugging
 - **✅ SYMBOL COMPATIBILITY**: Fixed symbol-specific freeze issues (XAUUSDm, EURUSD, etc.)
 - **✅ AUTO-TRADING**: Complete autotrading capabilities with real buy/sell execution
+- **✅ START BOT CRASH FIX**: Added comprehensive validation and pre-checks to prevent startup crashes
+- **✅ ERROR 10016 RESOLVED**: Fixed manual trading errors with proper symbol and lot validation
 
 ## System Architecture
 
