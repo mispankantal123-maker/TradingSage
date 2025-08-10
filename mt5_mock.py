@@ -28,6 +28,14 @@ SYMBOL_TRADE_MODE_FULL = 0
 SYMBOL_TRADE_MODE_CLOSEONLY = 1
 SYMBOL_TRADE_MODE_DISABLED = 3
 
+# Add missing constants for LSP
+ORDER_TIME_GTC = 0
+ORDER_FILLING_IOC = 1
+
+def symbol_select(symbol, enable=True):
+    """Mock symbol_select function"""
+    return True
+
 class MockAccountInfo:
     def __init__(self):
         self.login = 12345678
@@ -192,7 +200,7 @@ def positions_get() -> List:
     # Return empty list (no open positions)
     return []
 
-def orders_send(request: dict) -> dict:
+def order_send(request: dict) -> dict:
     """Mock order send"""
     print(f"🎭 MOCK: Order sent - {request.get('action')} {request.get('symbol')} {request.get('volume')} lots")
     

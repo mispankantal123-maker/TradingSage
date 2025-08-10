@@ -487,30 +487,7 @@ Lanjutkan trading dengan settings ini?"""
         self.logger.log("REAL MONEY TRADING STARTED!")
         messagebox.showinfo("Started", "Trading started successfully!")
         
-    def _handle_start_result(self, success):
-        """Handle trading start result in main thread"""
-        if success:
-            self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
-            messagebox.showinfo("Trading Started", "✅ Automated trading started successfully!\n\n⚠️ REAL MONEY mode active!\nMonitor carefully!")
-        else:
-            error_msg = """❌ Failed to start automated trading!
-
-Possible issues:
-• MT5 not connected properly
-• Invalid trading settings
-• Market is closed
-• Check logs for details
-
-Try:
-1. Reconnect to MT5
-2. Verify symbol is tradeable
-3. Check lot size and TP/SL values"""
-            messagebox.showerror("Trading Start Failed", error_msg)
-            
-    def _handle_start_error(self, error_msg):
-        """Handle trading start error in main thread"""
-        self.logger.log(f"❌ CRITICAL: Exception in start_trading: {error_msg}")
-        messagebox.showerror("Critical Error", f"Unexpected error starting trading:\n\n{error_msg}\n\nCheck logs for details")
+# REMOVED: Unused handler functions - not needed with direct approach
         
     def _handle_manual_result(self, order_type, success):
         """Handle manual trading result in main thread"""

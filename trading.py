@@ -261,33 +261,7 @@ class TradingEngine:
         """Get default settings for strategy"""
         return self.strategy_configs.get(strategy, {})
         
-    def start_trading(self, settings: Dict) -> bool:
-        """Start automated trading - simplified like bot3.py to prevent freeze"""
-        try:
-            if self.trading_running:
-                self.logger.log("Trading already running")
-                return False
-                
-            if not self.is_mt5_connected:
-                self.logger.log("MT5 not connected")
-                return False
-            
-            # Minimal validation to prevent freeze
-            self.current_settings = settings.copy()
-            
-            # Start trading thread immediately like bot3.py  
-            self.trading_running = True
-            self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
-            self.trading_thread.start()
-            
-            self.logger.log(f"Started {settings['strategy']} trading for {settings['symbol']}")
-            self.logger.log("WARNING: REAL MONEY TRADING ACTIVE!")
-            return True
-                
-        except Exception as e:
-            self.logger.log(f"ERROR starting trading: {str(e)}")
-            self.trading_running = False
-            return False
+# REMOVED: Duplicate start_trading method - GUI handles this directly now
         
     def stop_trading(self):
         """Stop automated trading with enhanced error handling"""
