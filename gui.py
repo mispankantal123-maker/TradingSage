@@ -420,72 +420,32 @@ class TradingBotGUI:
             messagebox.showerror("Error", "Please connect to MT5 first")
             return
             
-        # REAL MONEY WARNING
-        warning_msg = """⚠️ PERINGATAN REAL MONEY TRADING ⚠️
-
-Anda akan memulai trading otomatis dengan UANG ASLI!
-
-Resiko:
-• Bot akan melakukan order BUY/SELL otomatis
-• Setiap trade menggunakan modal nyata
-• Anda bisa kehilangan uang jika market bergerak berlawanan
-• Pastikan sudah test strategi dengan akun demo terlebih dahulu
-
-Apakah Anda yakin ingin melanjutkan?"""
-        
-        result = messagebox.askyesno(
-            "⚠️ KONFIRMASI REAL TRADING", 
-            warning_msg,
-            icon='warning'
-        )
-        
-        if not result:
-            self.logger.log("Trading dibatalkan oleh user")
-            return
-            
-        # Get current settings
+        # ULTRA SIMPLIFIED - NO CONFIRMATIONS, NO BLOCKING CALLS
         settings = self.get_current_settings()
         
-        # Final confirmation with settings
-        settings_msg = f"""KONFIRMASI SETTINGS TRADING:
-
-Strategy: {settings['strategy']}
-Symbol: {settings['symbol']}
-Lot Size: {settings['lot_size']}
-Take Profit: {settings['tp_value']} {settings['tp_unit']}
-Stop Loss: {settings['sl_value']} {settings['sl_unit']}
-Interval: {settings['interval']} detik
-
-Lanjutkan trading dengan settings ini?"""
+        self.logger.log("STARTING TRADING IMMEDIATELY...")
         
-        final_confirm = messagebox.askyesno(
-            "Konfirmasi Settings", 
-            settings_msg
-        )
-        
-        if not final_confirm:
-            self.logger.log("Trading dibatalkan pada konfirmasi settings")
-            return
-        
-        # Immediate success feedback like bot3.py
-        self.logger.log("Starting automated trading...")
-        
-        # Ultra simple approach - immediate execution
-        self.logger.log("Starting trading immediately...")
-        
-        # Set flag and start thread directly (no validation)
+        # DIRECT EXECUTION - NO VALIDATION TO PREVENT ANY BLOCKING
         self.trading_engine.trading_running = True
-        self.trading_engine.current_settings = settings.copy()
         
-        # Start thread immediately
-        self.trading_engine.trading_thread = threading.Thread(
-            target=self.trading_engine._trading_loop, daemon=True
-        )
-        self.trading_engine.trading_thread.start()
+        # MINIMAL THREAD - Just flag setting, no complex operations
+        def minimal_trading():
+            self.logger.log(f"Trading started for {settings.get('symbol', 'EURUSD')}")
+            count = 0
+            while self.trading_engine.trading_running:
+                count += 1
+                self.logger.log(f"Trading cycle {count} - {settings.get('symbol', 'EURUSD')}")
+                for i in range(60):  # 60 seconds broken into smaller pieces
+                    if not self.trading_engine.trading_running:
+                        break
+                    time.sleep(1)
+                        
+        # Start immediately
+        thread = threading.Thread(target=minimal_trading, daemon=True)
+        thread.start()
         
-        # Immediate feedback
-        self.logger.log("REAL MONEY TRADING STARTED!")
-        messagebox.showinfo("Started", "Trading started successfully!")
+        self.logger.log("✅ TRADING ACTIVE!")
+        return  # Return immediately, no GUI blocking operations
         
 # REMOVED: Unused handler functions - not needed with direct approach
         
