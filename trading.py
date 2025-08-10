@@ -3,16 +3,15 @@ MT5 Trading Bot - Trading Engine Module
 Enhanced trading functionality with multiple strategies and robust MT5 integration
 """
 
+# Try to import MT5, fallback to mock for development
 try:
     import MetaTrader5 as mt5
     MT5_AVAILABLE = True
+    print("✅ Real MetaTrader5 library loaded")
 except ImportError:
+    import mt5_mock as mt5
     MT5_AVAILABLE = False
-    import sys
-    print("ERROR: MetaTrader5 library not found!")
-    print("Install it with: pip install MetaTrader5")
-    print("Note: MetaTrader5 only works on Windows with MT5 terminal installed")
-    sys.exit(1)
+    print("🎭 Mock MetaTrader5 library loaded (development mode)")
 
 import numpy as np
 import threading
