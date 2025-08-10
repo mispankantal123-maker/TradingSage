@@ -74,6 +74,21 @@ class TradingBotGUI:
         
     def create_trading_tab(self, parent):
         """Create main trading interface"""
+        # WARNING BANNER
+        warning_frame = tk.Frame(parent, bg='#FF4444', relief='raised', bd=2)
+        warning_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        warning_label = tk.Label(
+            warning_frame, 
+            text="⚠️ REAL MONEY TRADING MODE - UANG ASLI AKAN DIGUNAKAN ⚠️",
+            bg='#FF4444', 
+            fg='white', 
+            font=('Arial', 12, 'bold'),
+            padx=10, 
+            pady=5
+        )
+        warning_label.pack()
+        
         # Status section
         status_frame = ttk.LabelFrame(parent, text="Status", padding=10)
         status_frame.pack(fill=tk.X, pady=(0, 10))
@@ -367,18 +382,62 @@ class TradingBotGUI:
         self.logger.log("MT5 disconnected")
         
     def start_trading(self):
-        """Start automated trading"""
+        """Start automated trading with safety confirmation"""
         if not self.trading_engine.is_connected():
             messagebox.showerror("Error", "Please connect to MT5 first")
+            return
+            
+        # REAL MONEY WARNING
+        warning_msg = """⚠️ PERINGATAN REAL MONEY TRADING ⚠️
+
+Anda akan memulai trading otomatis dengan UANG ASLI!
+
+Resiko:
+• Bot akan melakukan order BUY/SELL otomatis
+• Setiap trade menggunakan modal nyata
+• Anda bisa kehilangan uang jika market bergerak berlawanan
+• Pastikan sudah test strategi dengan akun demo terlebih dahulu
+
+Apakah Anda yakin ingin melanjutkan?"""
+        
+        result = messagebox.askyesno(
+            "⚠️ KONFIRMASI REAL TRADING", 
+            warning_msg,
+            icon='warning'
+        )
+        
+        if not result:
+            self.logger.log("Trading dibatalkan oleh user")
             return
             
         # Get current settings
         settings = self.get_current_settings()
         
+        # Final confirmation with settings
+        settings_msg = f"""KONFIRMASI SETTINGS TRADING:
+
+Strategy: {settings['strategy']}
+Symbol: {settings['symbol']}
+Lot Size: {settings['lot_size']}
+Take Profit: {settings['tp_value']} {settings['tp_unit']}
+Stop Loss: {settings['sl_value']} {settings['sl_unit']}
+Interval: {settings['interval']} detik
+
+Lanjutkan trading dengan settings ini?"""
+        
+        final_confirm = messagebox.askyesno(
+            "Konfirmasi Settings", 
+            settings_msg
+        )
+        
+        if not final_confirm:
+            self.logger.log("Trading dibatalkan pada konfirmasi settings")
+            return
+        
         # Start trading
         success = self.trading_engine.start_trading(settings)
         if success:
-            self.logger.log("Automated trading started")
+            self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
         else:
             messagebox.showerror("Error", "Failed to start trading")
             
@@ -388,30 +447,60 @@ class TradingBotGUI:
         self.logger.log("Automated trading stopped")
         
     def manual_buy(self):
-        """Execute manual BUY order"""
+        """Execute manual BUY order with confirmation"""
         if not self.trading_engine.is_connected():
             messagebox.showerror("Error", "Please connect to MT5 first")
             return
             
         settings = self.get_current_settings()
-        success = self.trading_engine.place_manual_order("BUY", settings)
-        if success:
-            self.logger.log("Manual BUY order executed")
+        
+        # Confirmation for manual trade
+        confirm_msg = f"""KONFIRMASI MANUAL BUY ORDER:
+
+Symbol: {settings['symbol']}
+Lot: {settings['lot_size']}
+TP: {settings['tp_value']} {settings['tp_unit']}
+SL: {settings['sl_value']} {settings['sl_unit']}
+
+⚠️ Ini adalah REAL MONEY trade!
+Lanjutkan BUY order?"""
+        
+        if messagebox.askyesno("Konfirmasi BUY Order", confirm_msg):
+            success = self.trading_engine.place_manual_order("BUY", settings)
+            if success:
+                self.logger.log("💰 Manual BUY order executed - REAL MONEY!")
+            else:
+                messagebox.showerror("Error", "Failed to execute BUY order")
         else:
-            messagebox.showerror("Error", "Failed to execute BUY order")
+            self.logger.log("Manual BUY order dibatalkan")
             
     def manual_sell(self):
-        """Execute manual SELL order"""
+        """Execute manual SELL order with confirmation"""
         if not self.trading_engine.is_connected():
             messagebox.showerror("Error", "Please connect to MT5 first")
             return
             
         settings = self.get_current_settings()
-        success = self.trading_engine.place_manual_order("SELL", settings)
-        if success:
-            self.logger.log("Manual SELL order executed")
+        
+        # Confirmation for manual trade
+        confirm_msg = f"""KONFIRMASI MANUAL SELL ORDER:
+
+Symbol: {settings['symbol']}
+Lot: {settings['lot_size']}
+TP: {settings['tp_value']} {settings['tp_unit']}
+SL: {settings['sl_value']} {settings['sl_unit']}
+
+⚠️ Ini adalah REAL MONEY trade!
+Lanjutkan SELL order?"""
+        
+        if messagebox.askyesno("Konfirmasi SELL Order", confirm_msg):
+            success = self.trading_engine.place_manual_order("SELL", settings)
+            if success:
+                self.logger.log("💰 Manual SELL order executed - REAL MONEY!")
+            else:
+                messagebox.showerror("Error", "Failed to execute SELL order")
         else:
-            messagebox.showerror("Error", "Failed to execute SELL order")
+            self.logger.log("Manual SELL order dibatalkan")
             
     def use_manual_symbol(self):
         """Use manually entered symbol"""

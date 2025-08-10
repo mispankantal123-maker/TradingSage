@@ -8,94 +8,11 @@ try:
     MT5_AVAILABLE = True
 except ImportError:
     MT5_AVAILABLE = False
-    # Create mock MT5 module for demo purposes
-    class MockMT5:
-        TIMEFRAME_M1 = 1
-        TIMEFRAME_M5 = 5
-        ORDER_TYPE_BUY = 0
-        ORDER_TYPE_SELL = 1
-        TRADE_ACTION_DEAL = 1
-        ORDER_TIME_GTC = 0
-        ORDER_FILLING_IOC = 1
-        TRADE_RETCODE_DONE = 10009
-        
-        @staticmethod
-        def initialize():
-            return True
-            
-        @staticmethod
-        def shutdown():
-            pass
-            
-        @staticmethod
-        def account_info():
-            class MockAccount:
-                login = 12345
-                balance = 10000.0
-                equity = 10000.0
-                margin = 0.0
-                margin_free = 10000.0
-                margin_level = 0.0
-            return MockAccount()
-            
-        @staticmethod
-        def symbols_get():
-            class MockSymbol:
-                def __init__(self, name):
-                    self.name = name
-                    self.visible = True
-            return [MockSymbol("EURUSD"), MockSymbol("GBPUSD"), MockSymbol("USDJPY"), 
-                   MockSymbol("XAUUSD"), MockSymbol("BTCUSD")]
-        
-        @staticmethod
-        def symbol_info(symbol):
-            class MockSymbolInfo:
-                point = 0.0001
-                digits = 5
-                visible = True
-                trade_contract_size = 100000
-                margin_initial = 100
-                volume_min = 0.01
-                volume_max = 1000
-                volume_step = 0.01
-            return MockSymbolInfo()
-            
-        @staticmethod
-        def symbol_select(symbol, enable):
-            return True
-            
-        @staticmethod
-        def symbol_info_tick(symbol):
-            import random
-            class MockTick:
-                ask = 1.1000 + random.uniform(-0.01, 0.01)
-                bid = 1.0998 + random.uniform(-0.01, 0.01)
-            return MockTick()
-            
-        @staticmethod
-        def positions_get():
-            return []
-            
-        @staticmethod
-        def copy_rates_from_pos(symbol, timeframe, start, count):
-            import random
-            rates = []
-            for i in range(count):
-                rates.append({
-                    'close': 1.1000 + random.uniform(-0.01, 0.01),
-                    'high': 1.1005 + random.uniform(-0.01, 0.01),
-                    'low': 1.0995 + random.uniform(-0.01, 0.01),
-                    'open': 1.1000 + random.uniform(-0.01, 0.01)
-                })
-            return rates
-            
-        @staticmethod
-        def order_send(request):
-            class MockResult:
-                retcode = MockMT5.TRADE_RETCODE_DONE
-            return MockResult()
-    
-    mt5 = MockMT5()
+    import sys
+    print("ERROR: MetaTrader5 library not found!")
+    print("Install it with: pip install MetaTrader5")
+    print("Note: MetaTrader5 only works on Windows with MT5 terminal installed")
+    sys.exit(1)
 
 import numpy as np
 import threading
@@ -156,11 +73,9 @@ class TradingEngine:
                 return False
                 
             self.is_mt5_connected = True
-            if MT5_AVAILABLE:
-                self.logger.log(f"MT5 connected successfully")
-            else:
-                self.logger.log(f"MT5 Demo Mode - Simulation active")
-            self.logger.log(f"Account: {account_info.login} | Balance: ${account_info.balance:.2f}")
+            self.logger.log(f"✅ MT5 REAL TRADING connected successfully")
+            self.logger.log(f"🔥 LIVE ACCOUNT: {account_info.login} | Balance: ${account_info.balance:.2f}")
+            self.logger.log(f"⚠️  WARNING: This is REAL MONEY trading - be careful!")
             
             return True
             

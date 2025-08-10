@@ -1,8 +1,10 @@
-# MT5 Trading Bot - Professional Edition
+# MT5 Trading Bot - REAL MONEY TRADING EDITION
 
 ## Overview
 
-This is a comprehensive MetaTrader 5 (MT5) trading bot application built with Python and tkinter. The bot provides an automated trading system with multiple trading strategies, real-time GUI controls, and advanced risk management features. The application connects directly to MT5 terminals for executing forex and commodity trades with configurable parameters including take profit, stop loss, lot sizing, and multiple trading strategies like scalping, intraday, arbitrage, and high-frequency trading.
+This is a comprehensive MetaTrader 5 (MT5) trading bot application built for REAL MONEY trading with Python and tkinter. The bot provides an automated trading system with multiple trading strategies, real-time GUI controls, and advanced risk management features. The application connects directly to MT5 terminals for executing live forex and commodity trades using real money with configurable parameters including take profit, stop loss, lot sizing, and multiple trading strategies like scalping, intraday, arbitrage, and high-frequency trading.
+
+**⚠️ CRITICAL: This is configured for REAL MONEY trading, not demo mode!**
 
 ## User Preferences
 

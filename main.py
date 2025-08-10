@@ -26,9 +26,12 @@ def main():
         
         # Create main window
         root = tk.Tk()
-        root.title("MT5 Trading Bot - Professional Edition")
+        root.title("MT5 Trading Bot - REAL MONEY TRADING")
         root.geometry("1200x800")
         root.minsize(1000, 600)
+        
+        # Add warning color to title bar
+        root.configure(bg='#FF4444')
         
         # Set icon and styling
         try:
