@@ -583,15 +583,24 @@ class TradingEngine:
                         
                     last_price = current_price
                     
-                    # Get technical indicators
+                    # Get technical indicators with timeout handling
+                    self.logger.log(f"📊 Getting technical indicators for {symbol}...")
                     indicators = self._get_technical_indicators(symbol, strategy)
                     if not indicators:
-                        self.logger.log("⚠️ Cannot get technical indicators - market might be closed")
+                        self.logger.log("⚠️ Cannot get technical indicators - retrying next cycle")
                         time.sleep(interval)
                         continue
                         
+                    self.logger.log(f"✅ Technical indicators loaded successfully")
+                    
                     # Generate trading signal
+                    self.logger.log(f"🔍 Analyzing {strategy} signals...")
                     signal = self._generate_signal(strategy, current_price, indicators)
+                    
+                    if signal:
+                        self.logger.log(f"📈 {strategy} signal generated: {signal}")
+                    else:
+                        self.logger.log(f"💤 No {strategy} signal - waiting next cycle")
                     
                     if signal:
                         # Execute trade
@@ -639,10 +648,12 @@ class TradingEngine:
             return 0
             
     def _get_technical_indicators(self, symbol: str, strategy: str) -> Optional[Dict]:
-        """Get technical indicators for analysis"""
+        """Get technical indicators for analysis with enhanced debugging"""
         try:
             strategy_config = self.strategy_configs.get(strategy, {})
             timeframe = strategy_config.get('timeframe', mt5.TIMEFRAME_M1)
+            
+            self.logger.log(f"🔄 Loading indicators for {symbol} on {timeframe} timeframe...")
             
             # Get different periods of data for various indicators
             ma10 = self._get_ma(symbol, 10, timeframe)
@@ -654,10 +665,22 @@ class TradingEngine:
             rsi = self._get_rsi(symbol, 14, timeframe)
             bb_upper, bb_lower = self._get_bollinger_bands(symbol, 20, timeframe)
             
-            # Check if all indicators are available
-            if None in [ma10, ema9, ema21, ema50, wma5, wma10, rsi, bb_upper, bb_lower]:
+            # Debug which indicators failed
+            failed_indicators = []
+            if ma10 is None: failed_indicators.append("MA10")
+            if ema9 is None: failed_indicators.append("EMA9")
+            if ema21 is None: failed_indicators.append("EMA21")
+            if ema50 is None: failed_indicators.append("EMA50")
+            if wma5 is None: failed_indicators.append("WMA5")
+            if wma10 is None: failed_indicators.append("WMA10")
+            if rsi is None: failed_indicators.append("RSI")
+            if bb_upper is None or bb_lower is None: failed_indicators.append("Bollinger")
+            
+            if failed_indicators:
+                self.logger.log(f"⚠️ Failed indicators for {symbol}: {', '.join(failed_indicators)}")
                 return None
                 
+            self.logger.log(f"✅ All indicators loaded for {symbol}")
             return {
                 'ma10': ma10,
                 'ema9': ema9,
@@ -671,31 +694,45 @@ class TradingEngine:
             }
             
         except Exception as e:
-            self.logger.log(f"ERROR getting technical indicators: {str(e)}")
+            self.logger.log(f"❌ CRITICAL: Error getting indicators for {symbol}: {str(e)}")
             return None
             
     def _get_ma(self, symbol: str, period: int, timeframe) -> Optional[float]:
-        """Calculate Moving Average"""
+        """Calculate Moving Average with enhanced error handling"""
         try:
-            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period)
-            if rates is None or len(rates) < period:
+            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 5)  # Get extra data for safety
+            if rates is None:
+                self.logger.log(f"⚠️ No rate data for MA({period}) on {symbol}")
                 return None
-            return float(np.mean([r['close'] for r in rates]))
-        except:
+            if len(rates) < period:
+                self.logger.log(f"⚠️ Insufficient data for MA({period}) on {symbol}: got {len(rates)}, need {period}")
+                return None
+            closes = [r['close'] for r in rates[-period:]]  # Use last period bars only
+            return float(np.mean(closes))
+        except Exception as e:
+            self.logger.log(f"❌ Error calculating MA for {symbol}: {str(e)}")
             return None
             
     def _get_ema(self, symbol: str, period: int, timeframe) -> Optional[float]:
-        """Calculate Exponential Moving Average"""
+        """Calculate Exponential Moving Average with enhanced error handling"""
         try:
-            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 1)
-            if rates is None or len(rates) < period:
+            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 10)
+            if rates is None:
+                self.logger.log(f"⚠️ No rate data for EMA({period}) on {symbol}")
                 return None
-            prices = np.array([r['close'] for r in rates])
-            weights = np.exp(np.linspace(-1., 0., period))
-            weights /= weights.sum()
-            result = np.convolve(prices, weights, mode='valid')
-            return float(result[-1])
-        except:
+            if len(rates) < period:
+                self.logger.log(f"⚠️ Insufficient data for EMA({period}) on {symbol}: got {len(rates)}, need {period}")
+                return None
+            
+            # Simplified EMA calculation
+            closes = [r['close'] for r in rates[-period:]]
+            multiplier = 2.0 / (period + 1)
+            ema = closes[0]  # Start with first price
+            for price in closes[1:]:
+                ema = (price * multiplier) + (ema * (1 - multiplier))
+            return float(ema)
+        except Exception as e:
+            self.logger.log(f"❌ Error calculating EMA for {symbol}: {str(e)}")
             return None
             
     def _get_wma(self, symbol: str, period: int, timeframe) -> Optional[float]:
@@ -711,35 +748,63 @@ class TradingEngine:
             return None
             
     def _get_rsi(self, symbol: str, period: int, timeframe) -> Optional[float]:
-        """Calculate Relative Strength Index"""
+        """Calculate Relative Strength Index with enhanced error handling"""
         try:
-            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 1)
-            if rates is None or len(rates) < period + 1:
+            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 10)
+            if rates is None:
+                self.logger.log(f"⚠️ No rate data for RSI({period}) on {symbol}")
                 return None
-            close = np.array([r['close'] for r in rates])
-            delta = np.diff(close)
-            gain = np.where(delta > 0, delta, 0)
-            loss = np.where(delta < 0, -delta, 0)
-            avg_gain = float(np.mean(gain))
-            avg_loss = float(np.mean(loss))
+            if len(rates) < period + 1:
+                self.logger.log(f"⚠️ Insufficient data for RSI({period}) on {symbol}: got {len(rates)}, need {period + 1}")
+                return None
+            
+            closes = [r['close'] for r in rates[-(period + 1):]]
+            gains = []
+            losses = []
+            
+            for i in range(1, len(closes)):
+                diff = closes[i] - closes[i-1]
+                if diff > 0:
+                    gains.append(diff)
+                    losses.append(0)
+                else:
+                    gains.append(0)
+                    losses.append(abs(diff))
+            
+            avg_gain = np.mean(gains) if gains else 0
+            avg_loss = np.mean(losses) if losses else 0
+            
             if avg_loss == 0:
                 return 100.0
+            
             rs = avg_gain / avg_loss
-            return float(100 - (100 / (1 + rs)))
-        except:
+            rsi = 100 - (100 / (1 + rs))
+            return float(rsi)
+        except Exception as e:
+            self.logger.log(f"❌ Error calculating RSI for {symbol}: {str(e)}")
             return None
             
     def _get_bollinger_bands(self, symbol: str, period: int, timeframe) -> tuple:
-        """Calculate Bollinger Bands"""
+        """Calculate Bollinger Bands with enhanced error handling"""
         try:
-            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period)
-            if rates is None or len(rates) < period:
+            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, period + 5)
+            if rates is None:
+                self.logger.log(f"⚠️ No rate data for Bollinger({period}) on {symbol}")
                 return None, None
-            close = np.array([r['close'] for r in rates])
-            sma = np.mean(close)
-            std = np.std(close)
-            return sma + (2 * std), sma - (2 * std)
-        except:
+            if len(rates) < period:
+                self.logger.log(f"⚠️ Insufficient data for Bollinger({period}) on {symbol}: got {len(rates)}, need {period}")
+                return None, None
+            
+            closes = [r['close'] for r in rates[-period:]]
+            sma = np.mean(closes)
+            std = np.std(closes)
+            
+            upper_band = sma + (2 * std)
+            lower_band = sma - (2 * std)
+            
+            return float(upper_band), float(lower_band)
+        except Exception as e:
+            self.logger.log(f"❌ Error calculating Bollinger Bands for {symbol}: {str(e)}")
             return None, None
             
     def _generate_signal(self, strategy: str, price: float, indicators: Dict) -> Optional[str]:
