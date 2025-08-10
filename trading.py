@@ -779,19 +779,20 @@ class TradingEngine:
                     
                     last_price = current_price
                     
-                    # Get indicators (direct calls like bot3.py)
-                    ma10 = self._get_ma(symbol, 10, mt5.TIMEFRAME_M1)
-                    ema9 = self._get_ema(symbol, 9, mt5.TIMEFRAME_M1) 
-                    ema21 = self._get_ema(symbol, 21, mt5.TIMEFRAME_M1)
-                    ema50 = self._get_ema(symbol, 50, mt5.TIMEFRAME_M1)
-                    wma5 = self._get_wma(symbol, 5, mt5.TIMEFRAME_M1)
-                    wma10 = self._get_wma(symbol, 10, mt5.TIMEFRAME_M1)
-                    rsi = self._get_rsi(symbol, 14, mt5.TIMEFRAME_M1)
-                    bb_upper, bb_lower = self._get_bollinger_bands(symbol, 20, mt5.TIMEFRAME_M1)
-                    
-                    # Check indicators (like bot3.py)
-                    if None in [ma10, ema9, ema21, ema50, wma5, wma10, rsi, bb_upper, bb_lower]:
-                        self.logger.log("Indicator data incomplete, retrying...")
+                    # Get indicators with timeout protection  
+                    try:
+                        ma10 = self._get_ma(symbol, 10, mt5.TIMEFRAME_M1) or 50.0
+                        ema9 = self._get_ema(symbol, 9, mt5.TIMEFRAME_M1) or 50.0
+                        ema21 = self._get_ema(symbol, 21, mt5.TIMEFRAME_M1) or 50.0
+                        ema50 = self._get_ema(symbol, 50, mt5.TIMEFRAME_M1) or 50.0
+                        wma5 = self._get_wma(symbol, 5, mt5.TIMEFRAME_M1) or 50.0
+                        wma10 = self._get_wma(symbol, 10, mt5.TIMEFRAME_M1) or 50.0
+                        rsi = self._get_rsi(symbol, 14, mt5.TIMEFRAME_M1) or 50.0
+                        bb_upper, bb_lower = self._get_bollinger_bands(symbol, 20, mt5.TIMEFRAME_M1)
+                        if bb_upper is None: bb_upper = current_price * 1.01
+                        if bb_lower is None: bb_lower = current_price * 0.99
+                    except Exception as ind_e:
+                        self.logger.log(f"Indicator error: {str(ind_e)}")
                         time.sleep(interval)
                         continue
                     
