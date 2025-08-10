@@ -369,17 +369,50 @@ class TradingBotGUI:
         
     # Event handlers
     def connect_mt5(self):
-        """Connect to MT5"""
-        success = self.trading_engine.connect_mt5()
+        """Connect to MT5 asynchronously"""
+        def connect_async():
+            try:
+                success = self.trading_engine.connect_mt5()
+                self.root.after(0, self._handle_connect_result, success)
+            except Exception as e:
+                self.root.after(0, self._handle_connect_error, str(e))
+        
+        self.logger.log("⏳ Connecting to MT5...")
+        threading.Thread(target=connect_async, daemon=True).start()
+        
+    def disconnect_mt5(self):
+        """Disconnect from MT5 asynchronously"""
+        def disconnect_async():
+            try:
+                self.trading_engine.disconnect_mt5()
+                self.root.after(0, self._handle_disconnect_result)
+            except Exception as e:
+                self.root.after(0, self._handle_disconnect_error, str(e))
+        
+        self.logger.log("⏳ Disconnecting from MT5...")
+        threading.Thread(target=disconnect_async, daemon=True).start()
+        
+    def _handle_connect_result(self, success):
+        """Handle MT5 connection result"""
         if success:
-            self.logger.log("MT5 connected successfully")
+            self.logger.log("✅ MT5 connected successfully")
         else:
+            self.logger.log("❌ Failed to connect to MT5")
             messagebox.showerror("Connection Error", "Failed to connect to MT5")
             
-    def disconnect_mt5(self):
-        """Disconnect from MT5"""
-        self.trading_engine.disconnect_mt5()
-        self.logger.log("MT5 disconnected")
+    def _handle_connect_error(self, error_msg):
+        """Handle MT5 connection error"""
+        self.logger.log(f"❌ MT5 connection error: {error_msg}")
+        messagebox.showerror("Connection Error", f"MT5 connection error:\n\n{error_msg}")
+        
+    def _handle_disconnect_result(self):
+        """Handle MT5 disconnection result"""
+        self.logger.log("✅ MT5 disconnected")
+        
+    def _handle_disconnect_error(self, error_msg):
+        """Handle MT5 disconnection error"""
+        self.logger.log(f"❌ MT5 disconnection error: {error_msg}")
+        messagebox.showerror("Disconnection Error", f"MT5 disconnection error:\n\n{error_msg}")
         
     def start_trading(self):
         """Start automated trading with safety confirmation"""
@@ -434,14 +467,30 @@ Lanjutkan trading dengan settings ini?"""
             self.logger.log("Trading dibatalkan pada konfirmasi settings")
             return
         
-        # Start trading with better error handling
-        try:
-            success = self.trading_engine.start_trading(settings)
-            if success:
-                self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
-                messagebox.showinfo("Trading Started", "✅ Automated trading started successfully!\n\n⚠️ REAL MONEY mode active!\nMonitor carefully!")
-            else:
-                error_msg = """❌ Failed to start automated trading!
+        # Start trading asynchronously to prevent GUI freezing
+        def start_trading_async():
+            try:
+                success = self.trading_engine.start_trading(settings)
+                # Use root.after to safely update GUI from thread
+                self.root.after(0, self._handle_start_result, success)
+            except Exception as e:
+                error_msg = str(e)
+                self.root.after(0, self._handle_start_error, error_msg)
+        
+        # Show immediate feedback
+        self.logger.log("⏳ Starting automated trading...")
+        
+        # Start in separate thread to prevent GUI freeze
+        start_thread = threading.Thread(target=start_trading_async, daemon=True)
+        start_thread.start()
+        
+    def _handle_start_result(self, success):
+        """Handle trading start result in main thread"""
+        if success:
+            self.logger.log("🔥 REAL MONEY TRADING STARTED - BE CAREFUL!")
+            messagebox.showinfo("Trading Started", "✅ Automated trading started successfully!\n\n⚠️ REAL MONEY mode active!\nMonitor carefully!")
+        else:
+            error_msg = """❌ Failed to start automated trading!
 
 Possible issues:
 • MT5 not connected properly
@@ -453,11 +502,25 @@ Try:
 1. Reconnect to MT5
 2. Verify symbol is tradeable
 3. Check lot size and TP/SL values"""
-                messagebox.showerror("Trading Start Failed", error_msg)
-                
-        except Exception as e:
-            self.logger.log(f"❌ CRITICAL: Exception in start_trading: {str(e)}")
-            messagebox.showerror("Critical Error", f"Unexpected error starting trading:\n\n{str(e)}\n\nCheck logs for details")
+            messagebox.showerror("Trading Start Failed", error_msg)
+            
+    def _handle_start_error(self, error_msg):
+        """Handle trading start error in main thread"""
+        self.logger.log(f"❌ CRITICAL: Exception in start_trading: {error_msg}")
+        messagebox.showerror("Critical Error", f"Unexpected error starting trading:\n\n{error_msg}\n\nCheck logs for details")
+        
+    def _handle_manual_result(self, order_type, success):
+        """Handle manual trading result in main thread"""
+        if success:
+            self.logger.log(f"💰 Manual {order_type} order executed - REAL MONEY!")
+            messagebox.showinfo("Order Success", f"✅ Manual {order_type} order executed successfully!\n\n⚠️ REAL MONEY trade completed!")
+        else:
+            messagebox.showerror("Order Failed", f"❌ Failed to execute {order_type} order!\n\nCheck logs for details.")
+            
+    def _handle_manual_error(self, order_type, error_msg):
+        """Handle manual trading error in main thread"""
+        self.logger.log(f"❌ ERROR executing manual {order_type}: {error_msg}")
+        messagebox.showerror("Order Error", f"❌ Error executing {order_type} order:\n\n{error_msg}\n\nCheck logs for details.")
             
     def stop_trading(self):
         """Stop automated trading"""
@@ -484,11 +547,16 @@ SL: {settings['sl_value']} {settings['sl_unit']}
 Lanjutkan BUY order?"""
         
         if messagebox.askyesno("Konfirmasi BUY Order", confirm_msg):
-            success = self.trading_engine.place_manual_order("BUY", settings)
-            if success:
-                self.logger.log("💰 Manual BUY order executed - REAL MONEY!")
-            else:
-                messagebox.showerror("Error", "Failed to execute BUY order")
+            # Execute order asynchronously to prevent GUI freeze
+            def execute_buy_async():
+                try:
+                    success = self.trading_engine.place_manual_order("BUY", settings)
+                    self.root.after(0, self._handle_manual_result, "BUY", success)
+                except Exception as e:
+                    self.root.after(0, self._handle_manual_error, "BUY", str(e))
+            
+            self.logger.log("⏳ Executing manual BUY order...")
+            threading.Thread(target=execute_buy_async, daemon=True).start()
         else:
             self.logger.log("Manual BUY order dibatalkan")
             
@@ -512,11 +580,16 @@ SL: {settings['sl_value']} {settings['sl_unit']}
 Lanjutkan SELL order?"""
         
         if messagebox.askyesno("Konfirmasi SELL Order", confirm_msg):
-            success = self.trading_engine.place_manual_order("SELL", settings)
-            if success:
-                self.logger.log("💰 Manual SELL order executed - REAL MONEY!")
-            else:
-                messagebox.showerror("Error", "Failed to execute SELL order")
+            # Execute order asynchronously to prevent GUI freeze
+            def execute_sell_async():
+                try:
+                    success = self.trading_engine.place_manual_order("SELL", settings)
+                    self.root.after(0, self._handle_manual_result, "SELL", success)
+                except Exception as e:
+                    self.root.after(0, self._handle_manual_error, "SELL", str(e))
+            
+            self.logger.log("⏳ Executing manual SELL order...")
+            threading.Thread(target=execute_sell_async, daemon=True).start()
         else:
             self.logger.log("Manual SELL order dibatalkan")
             
