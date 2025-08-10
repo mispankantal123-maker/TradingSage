@@ -605,19 +605,26 @@ class TradingEngine:
                     self.logger.log(f"🎯 TP Target: {profit_target} {currency} ({tp_value}%)")
                     
                     # Calculate pip value and required pips for profit target
-                    pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
-                    if pip_value > 0:
-                        pips_needed = profit_target / pip_value
-                        if order_type == "BUY":
-                            tp = price + (pips_needed * point * 10)
+                    try:
+                        pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
+                        if pip_value > 0:
+                            pips_needed = profit_target / pip_value
+                            if order_type == "BUY":
+                                tp = price + (pips_needed * point * 10)
+                            else:
+                                tp = price - (pips_needed * point * 10)
+                            
+                            self.logger.log(f"📊 TP calculated: {profit_target} {currency} = {pips_needed:.1f} pips = {tp}")
                         else:
-                            tp = price - (pips_needed * point * 10)
-                        
-                        self.logger.log(f"📊 TP calculated: {profit_target} {currency} = {pips_needed:.1f} pips = {tp}")
-                    else:
-                        self.logger.log("⚠️ Cannot calculate pip value, using default TP")
+                            self.logger.log("⚠️ Cannot calculate pip value, using default TP")
+                            if order_type == "BUY":
+                                tp = price + (20 * point * 10)  # 20 pips default
+                            else:
+                                tp = price - (20 * point * 10)
+                    except Exception as tp_calc_e:
+                        self.logger.log(f"❌ TP calculation error: {str(tp_calc_e)}")
                         if order_type == "BUY":
-                            tp = price + (20 * point * 10)  # 20 pips default
+                            tp = price + (20 * point * 10)
                         else:
                             tp = price - (20 * point * 10)
             elif tp_unit == "money":
@@ -661,19 +668,26 @@ class TradingEngine:
                     self.logger.log(f"🛡️ SL Limit: {loss_limit} {currency} ({sl_value}%)")
                     
                     # Calculate pip value and required pips for loss limit
-                    pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
-                    if pip_value > 0:
-                        pips_needed = loss_limit / pip_value
-                        if order_type == "BUY":
-                            sl = price - (pips_needed * point * 10)
+                    try:
+                        pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
+                        if pip_value > 0:
+                            pips_needed = loss_limit / pip_value
+                            if order_type == "BUY":
+                                sl = price - (pips_needed * point * 10)
+                            else:
+                                sl = price + (pips_needed * point * 10)
+                            
+                            self.logger.log(f"📊 SL calculated: {loss_limit} {currency} = {pips_needed:.1f} pips = {sl}")
                         else:
-                            sl = price + (pips_needed * point * 10)
-                        
-                        self.logger.log(f"📊 SL calculated: {loss_limit} {currency} = {pips_needed:.1f} pips = {sl}")
-                    else:
-                        self.logger.log("⚠️ Cannot calculate pip value, using default SL")
+                            self.logger.log("⚠️ Cannot calculate pip value, using default SL")
+                            if order_type == "BUY":
+                                sl = price - (10 * point * 10)  # 10 pips default
+                            else:
+                                sl = price + (10 * point * 10)
+                    except Exception as sl_calc_e:
+                        self.logger.log(f"❌ SL calculation error: {str(sl_calc_e)}")
                         if order_type == "BUY":
-                            sl = price - (10 * point * 10)  # 10 pips default
+                            sl = price - (10 * point * 10)
                         else:
                             sl = price + (10 * point * 10)
             elif sl_unit == "money":
@@ -693,8 +707,27 @@ class TradingEngine:
             return tp, sl
             
         except Exception as e:
-            self.logger.log(f"ERROR calculating TP/SL: {str(e)}")
-            return 0, 0
+            self.logger.log(f"❌ CRITICAL ERROR calculating TP/SL: {str(e)}")
+            self.logger.log(f"🔧 Using fallback TP/SL calculation")
+            # Return safe fallback values
+            try:
+                symbol_info = mt5.symbol_info(symbol)
+                if symbol_info:
+                    point = symbol_info.point
+                    digits = symbol_info.digits
+                    # Safe fallback: 20 pips TP, 10 pips SL
+                    if order_type == "BUY":
+                        tp = round(price + (20 * point * 10), digits)
+                        sl = round(price - (10 * point * 10), digits)
+                    else:
+                        tp = round(price - (20 * point * 10), digits)
+                        sl = round(price + (10 * point * 10), digits)
+                    self.logger.log(f"✅ Fallback TP/SL: TP={tp}, SL={sl}")
+                    return tp, sl
+                else:
+                    return 0, 0
+            except:
+                return 0, 0
             
     def calculate_pip_value(self, symbol: str, lot_size: float) -> float:
         """Calculate pip value for money-based TP/SL calculations with enhanced accuracy"""
@@ -727,11 +760,18 @@ class TradingEngine:
             elif "US30" in symbol or "SPX" in symbol or "NAS" in symbol:
                 pip_value = point * contract_size * lot_size
                 
+            # Ensure pip value is reasonable
+            if pip_value <= 0 or pip_value > 1000000:
+                self.logger.log(f"⚠️ Unreasonable pip value {pip_value}, using default")
+                pip_value = 10
+                
             self.logger.log(f"✅ Pip value calculated: {pip_value} {account_currency}")
             return pip_value
             
         except Exception as e:
             self.logger.log(f"❌ ERROR calculating pip value: {str(e)}")
+            import traceback
+            self.logger.log(f"🔧 Traceback: {traceback.format_exc()}")
             return 10  # Return reasonable default for most cases
             
     def _trading_loop(self):
