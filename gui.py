@@ -523,9 +523,27 @@ Try:
         messagebox.showerror("Order Error", f"❌ Error executing {order_type} order:\n\n{error_msg}\n\nCheck logs for details.")
             
     def stop_trading(self):
-        """Stop automated trading"""
-        self.trading_engine.stop_trading()
-        self.logger.log("Automated trading stopped")
+        """Stop automated trading asynchronously"""
+        def stop_trading_async():
+            try:
+                self.trading_engine.stop_trading()
+                self.root.after(0, self._handle_stop_result, True)
+            except Exception as e:
+                self.root.after(0, self._handle_stop_error, str(e))
+        
+        self.logger.log("⏳ Stopping automated trading...")
+        threading.Thread(target=stop_trading_async, daemon=True).start()
+        
+    def _handle_stop_result(self, success):
+        """Handle stop trading result in main thread"""
+        if success:
+            self.logger.log("✅ Automated trading stopped successfully")
+            messagebox.showinfo("Trading Stopped", "✅ Automated trading stopped successfully!")
+        
+    def _handle_stop_error(self, error_msg):
+        """Handle stop trading error in main thread"""
+        self.logger.log(f"❌ Error stopping trading: {error_msg}")
+        messagebox.showerror("Stop Error", f"❌ Error stopping trading:\n\n{error_msg}")
         
     def manual_buy(self):
         """Execute manual BUY order with confirmation"""

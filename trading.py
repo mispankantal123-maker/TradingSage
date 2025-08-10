@@ -317,16 +317,31 @@ class TradingEngine:
             return False
         
     def stop_trading(self):
-        """Stop automated trading"""
-        if self.trading_running:
+        """Stop automated trading with enhanced error handling"""
+        try:
+            if not self.trading_running:
+                self.logger.log("⚠️ Trading is not currently running")
+                return
+                
+            self.logger.log("🔄 Stopping automated trading...")
             self.trading_running = False
-            self.logger.log("Stopping automated trading...")
             
-            # Wait for trading thread to finish
+            # Wait for trading thread to finish gracefully
             if self.trading_thread and self.trading_thread.is_alive():
+                self.logger.log("⏳ Waiting for trading thread to finish...")
                 self.trading_thread.join(timeout=5)
                 
-            self.logger.log("Automated trading stopped")
+                # Force cleanup if thread still alive
+                if self.trading_thread.is_alive():
+                    self.logger.log("⚠️ Trading thread still running - forcing cleanup")
+                    
+            self.logger.log("✅ Automated trading stopped successfully")
+            
+        except Exception as e:
+            self.logger.log(f"❌ Error stopping trading: {str(e)}")
+            # Force stop even if error occurs
+            self.trading_running = False
+            raise e
             
     def validate_trading_settings(self, settings: Dict) -> bool:
         """Validate trading settings"""
