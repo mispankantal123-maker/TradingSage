@@ -262,81 +262,30 @@ class TradingEngine:
         return self.strategy_configs.get(strategy, {})
         
     def start_trading(self, settings: Dict) -> bool:
-        """Start automated trading with enhanced error handling"""
+        """Start automated trading - simplified like bot3.py to prevent freeze"""
         try:
             if self.trading_running:
-                self.logger.log("⚠️ Trading is already running")
+                self.logger.log("Trading already running")
                 return False
                 
             if not self.is_mt5_connected:
-                self.logger.log("❌ ERROR: MT5 not connected - cannot start trading")
-                return False
-                
-            # Double check MT5 connection
-            try:
-                # Try to access MT5 functions to verify real connection
-                account_info = mt5.account_info()
-                if not account_info:
-                    self.logger.log("❌ ERROR: MT5 connection invalid")
-                    self.is_mt5_connected = False
-                    return False
-                    
-                self.logger.log(f"✅ MT5 connected - Account: {account_info.login}")
-                
-            except Exception as e:
-                self.logger.log(f"❌ ERROR: Cannot access MT5: {str(e)}")
-                self.is_mt5_connected = False
-                return False
-                
-            # Validate settings with detailed debugging
-            self.logger.log("🔄 Validating trading settings...")
-            if not self.validate_trading_settings(settings):
-                self.logger.log("❌ ERROR: Invalid trading settings")
+                self.logger.log("MT5 not connected")
                 return False
             
-            self.logger.log("✅ Trading settings validated successfully")
+            # Minimal validation to prevent freeze
             self.current_settings = settings.copy()
             
-            # Pre-check trading loop requirements
-            self.logger.log("🔄 Pre-checking trading requirements...")
-            try:
-                # Test symbol price access
-                tick = mt5.symbol_info_tick(settings['symbol'])
-                if not tick:
-                    self.logger.log(f"❌ Cannot access price data for {settings['symbol']}")
-                    return False
-                self.logger.log(f"✅ Symbol {settings['symbol']} price accessible: {tick.ask}")
-                
-                # Test basic indicator calculation to prevent crash
-                test_rates = mt5.copy_rates_from_pos(settings['symbol'], mt5.TIMEFRAME_M1, 0, 10)
-                if test_rates is None:
-                    self.logger.log(f"❌ Cannot access historical data for {settings['symbol']}")
-                    return False
-                self.logger.log(f"✅ Historical data accessible: {len(test_rates)} bars")
-                
-            except Exception as e:
-                self.logger.log(f"❌ Pre-check failed: {str(e)}")
-                return False
-            
-            # Start trading thread with error handling
-            self.logger.log("🔄 Starting trading thread...")
+            # Start trading thread immediately like bot3.py  
             self.trading_running = True
+            self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
+            self.trading_thread.start()
             
-            try:
-                self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
-                self.trading_thread.start()
-                
-                self.logger.log(f"🔥 Started {settings['strategy']} trading for {settings['symbol']}")
-                self.logger.log(f"⚠️ WARNING: REAL MONEY TRADING ACTIVE!")
-                return True
-                
-            except Exception as e:
-                self.logger.log(f"❌ CRITICAL: Error starting trading thread: {str(e)}")
-                self.trading_running = False
-                return False
+            self.logger.log(f"Started {settings['strategy']} trading for {settings['symbol']}")
+            self.logger.log("WARNING: REAL MONEY TRADING ACTIVE!")
+            return True
                 
         except Exception as e:
-            self.logger.log(f"❌ CRITICAL ERROR in start_trading: {str(e)}")
+            self.logger.log(f"ERROR starting trading: {str(e)}")
             self.trading_running = False
             return False
         
