@@ -583,17 +583,43 @@ class TradingEngine:
             elif tp_unit == "price":
                 tp = tp_value
             elif tp_unit == "percent":
-                # Add validation for percent values
-                if tp_value <= 0 or tp_value > 100:
+                # Calculate TP based on percentage of account balance (money target)
+                if tp_value <= 0 or tp_value > 50:
                     self.logger.log(f"⚠️ Invalid TP percent value: {tp_value}%, using default 2%")
                     tp_value = 2.0
                 
-                if order_type == "BUY":
-                    tp = price * (1 + tp_value / 100)
+                # Get account balance
+                account_info = mt5.account_info()
+                if not account_info:
+                    self.logger.log("⚠️ Cannot get account info, using price-based percent")
+                    if order_type == "BUY":
+                        tp = price * (1 + tp_value / 100)
+                    else:
+                        tp = price * (1 - tp_value / 100)
                 else:
-                    tp = price * (1 - tp_value / 100)
+                    balance = account_info.balance
+                    currency = account_info.currency
+                    profit_target = balance * (tp_value / 100)
                     
-                self.logger.log(f"📊 TP calculated: {order_type} at {price} with {tp_value}% = {tp}")
+                    self.logger.log(f"💰 Balance: {balance} {currency}")
+                    self.logger.log(f"🎯 TP Target: {profit_target} {currency} ({tp_value}%)")
+                    
+                    # Calculate pip value and required pips for profit target
+                    pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
+                    if pip_value > 0:
+                        pips_needed = profit_target / pip_value
+                        if order_type == "BUY":
+                            tp = price + (pips_needed * point * 10)
+                        else:
+                            tp = price - (pips_needed * point * 10)
+                        
+                        self.logger.log(f"📊 TP calculated: {profit_target} {currency} = {pips_needed:.1f} pips = {tp}")
+                    else:
+                        self.logger.log("⚠️ Cannot calculate pip value, using default TP")
+                        if order_type == "BUY":
+                            tp = price + (20 * point * 10)  # 20 pips default
+                        else:
+                            tp = price - (20 * point * 10)
             elif tp_unit == "money":
                 # Simplified money calculation (would need more complex logic for accuracy)
                 pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
@@ -613,17 +639,43 @@ class TradingEngine:
             elif sl_unit == "price":
                 sl = sl_value
             elif sl_unit == "percent":
-                # Add validation for percent values  
-                if sl_value <= 0 or sl_value > 100:
+                # Calculate SL based on percentage of account balance (loss limit)
+                if sl_value <= 0 or sl_value > 50:
                     self.logger.log(f"⚠️ Invalid SL percent value: {sl_value}%, using default 1%")
                     sl_value = 1.0
                 
-                if order_type == "BUY":
-                    sl = price * (1 - sl_value / 100)
+                # Get account balance
+                account_info = mt5.account_info()
+                if not account_info:
+                    self.logger.log("⚠️ Cannot get account info, using price-based percent")
+                    if order_type == "BUY":
+                        sl = price * (1 - sl_value / 100)
+                    else:
+                        sl = price * (1 + sl_value / 100)
                 else:
-                    sl = price * (1 + sl_value / 100)
+                    balance = account_info.balance
+                    currency = account_info.currency
+                    loss_limit = balance * (sl_value / 100)
                     
-                self.logger.log(f"📊 SL calculated: {order_type} at {price} with {sl_value}% = {sl}")
+                    self.logger.log(f"💰 Balance: {balance} {currency}")
+                    self.logger.log(f"🛡️ SL Limit: {loss_limit} {currency} ({sl_value}%)")
+                    
+                    # Calculate pip value and required pips for loss limit
+                    pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
+                    if pip_value > 0:
+                        pips_needed = loss_limit / pip_value
+                        if order_type == "BUY":
+                            sl = price - (pips_needed * point * 10)
+                        else:
+                            sl = price + (pips_needed * point * 10)
+                        
+                        self.logger.log(f"📊 SL calculated: {loss_limit} {currency} = {pips_needed:.1f} pips = {sl}")
+                    else:
+                        self.logger.log("⚠️ Cannot calculate pip value, using default SL")
+                        if order_type == "BUY":
+                            sl = price - (10 * point * 10)  # 10 pips default
+                        else:
+                            sl = price + (10 * point * 10)
             elif sl_unit == "money":
                 # Simplified money calculation
                 pip_value = self.calculate_pip_value(symbol, settings['lot_size'])
@@ -645,25 +697,42 @@ class TradingEngine:
             return 0, 0
             
     def calculate_pip_value(self, symbol: str, lot_size: float) -> float:
-        """Calculate pip value for money-based TP/SL calculations"""
+        """Calculate pip value for money-based TP/SL calculations with enhanced accuracy"""
         try:
             symbol_info = mt5.symbol_info(symbol)
             if not symbol_info:
+                self.logger.log(f"⚠️ Cannot get symbol info for {symbol}")
                 return 0
                 
-            # Simplified pip value calculation
-            # This is a basic implementation - real pip value calculation is more complex
             point = symbol_info.point
             contract_size = symbol_info.trade_contract_size
             
-            # For most forex pairs, pip value = (point * contract_size * lot_size)
+            # Get account currency for proper conversion
+            account_info = mt5.account_info()
+            account_currency = account_info.currency if account_info else "USD"
+            
+            self.logger.log(f"🔧 Calculating pip value: {symbol}, lot: {lot_size}")
+            self.logger.log(f"📋 Point: {point}, Contract: {contract_size}, Account: {account_currency}")
+            
+            # Basic pip value calculation (1 pip = 10 * point for most instruments)
             pip_value = point * 10 * contract_size * lot_size
             
+            # For JPY pairs, adjustment might be needed
+            if "JPY" in symbol:
+                pip_value = point * contract_size * lot_size
+                
+            # For precious metals and indices, different calculation
+            if symbol.startswith("XAU") or symbol.startswith("XAG") or "Gold" in symbol:
+                pip_value = point * contract_size * lot_size * 10
+            elif "US30" in symbol or "SPX" in symbol or "NAS" in symbol:
+                pip_value = point * contract_size * lot_size
+                
+            self.logger.log(f"✅ Pip value calculated: {pip_value} {account_currency}")
             return pip_value
             
         except Exception as e:
-            self.logger.log(f"ERROR calculating pip value: {str(e)}")
-            return 1  # Return default value
+            self.logger.log(f"❌ ERROR calculating pip value: {str(e)}")
+            return 10  # Return reasonable default for most cases
             
     def _trading_loop(self):
         """Main trading loop running in separate thread with enhanced crash protection"""

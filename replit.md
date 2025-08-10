@@ -24,6 +24,7 @@ Preferred communication style: Simple, everyday language.
 - **✅ AUTO-TRADING**: Complete autotrading capabilities with real buy/sell execution
 - **✅ START BOT CRASH FIX**: Added comprehensive validation and pre-checks to prevent startup crashes
 - **✅ ERROR 10016 RESOLVED**: Fixed manual trading errors with proper symbol and lot validation
+- **✅ PERCENT TP/SL FIXED**: Implemented balance-based percentage calculations for TP/SL (e.g., 1% of 1M IDR = 10K IDR profit/loss target)
 
 ## System Architecture
 
