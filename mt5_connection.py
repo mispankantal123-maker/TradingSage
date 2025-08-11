@@ -1,6 +1,7 @@
+
 # --- MetaTrader 5 Connection Module ---
 """
-MT5 connection, initialization, and symbol management
+MT5 connection, initialization, and symbol management - REAL TRADING ONLY
 """
 
 import platform
@@ -8,45 +9,44 @@ import os
 from typing import List, Optional, Dict, Any
 from logger_utils import logger
 
-# REAL MT5 Connection for Windows Trading (FIXED)
+# REAL MT5 Connection for Windows Live Trading ONLY
 try:
     import MetaTrader5 as mt5
-    print("✅ Using REAL MetaTrader5 for Windows trading")
+    print("✅ Using REAL MetaTrader5 for Windows live trading")
 except ImportError:
-    import mt5_mock as mt5 
-    print("⚠️ Using mt5_mock for development - NOT for real trading!")
+    logger("❌ CRITICAL: MetaTrader5 module not found!")
+    logger("💡 Install: pip install MetaTrader5")
+    raise ImportError("MetaTrader5 required for live trading")
 
 
 def connect_mt5() -> bool:
-    """Enhanced MT5 connection with comprehensive error handling and logging"""
+    """Enhanced MT5 connection for Windows live trading"""
     try:
-        # Use mock MT5 for Replit environment
-        global mt5
-        
-        logger("🔄 Initializing MetaTrader 5 connection...")
+        logger("🔄 Connecting to MetaTrader 5 for LIVE TRADING...")
         logger(f"🔍 Python: {platform.python_version()} ({platform.architecture()[0]})")
         logger(f"🔍 Platform: {platform.system()} {platform.release()}")
+        
+        # Ensure Windows platform
+        if platform.system() != "Windows":
+            logger("❌ This bot requires Windows OS for live MT5 trading")
+            return False
         
         # Check if MT5 is already initialized
         if mt5.initialize():
             logger("✅ MT5 initialization successful")
             
-            # Get terminal info for debugging
-            try:
-                terminal_info = mt5.terminal_info()
-                if terminal_info:
-                    logger(f"📊 Terminal: {terminal_info.name}")
-                    logger(f"📍 Path: {terminal_info.path}")
-                    logger(f"🔢 Build: {terminal_info.build}")
-                    logger(f"🌐 Connected: {'✅' if terminal_info.connected else '❌'}")
-                    
-                    if not terminal_info.connected:
-                        logger("⚠️ Terminal not connected to server")
-                        return False
+            # Get terminal info
+            terminal_info = mt5.terminal_info()
+            if terminal_info:
+                logger(f"📊 Terminal: {terminal_info.name}")
+                logger(f"📍 Path: {terminal_info.path}")
+                logger(f"🔢 Build: {terminal_info.build}")
+                logger(f"🌐 Connected: {'✅' if terminal_info.connected else '❌'}")
+                
+                if not terminal_info.connected:
+                    logger("❌ Terminal not connected to server - check internet/login")
+                    return False
                         
-            except Exception as term_e:
-                logger(f"⚠️ Could not get terminal info: {str(term_e)}")
-            
             # Test connection with account info
             account_info = mt5.account_info()
             if account_info:
@@ -57,41 +57,33 @@ def connect_mt5() -> bool:
                 logger(f"🔐 Trade Allowed: {'✅' if account_info.trade_allowed else '❌'}")
                 
                 if not account_info.trade_allowed:
-                    logger("❌ Trading not allowed on this account")
+                    logger("❌ CRITICAL: Trading not allowed on this account")
                     return False
                     
+                logger("🎯 READY FOR LIVE TRADING")
                 return True
             else:
-                logger("❌ Cannot get account info - not logged in")
+                logger("❌ Cannot get account info - login to MT5 first")
                 return False
                 
         else:
             error = mt5.last_error()
             logger(f"❌ MT5 initialization failed: {error}")
-            logger("🔧 Troubleshooting checklist:")
-            logger("   1. Ensure MT5 is running")
-            logger("   2. Login to trading account")
-            logger("   3. Run MT5 as Administrator")
-            logger("   4. Check if Python and MT5 are same architecture (both 64-bit)")
+            logger("🔧 REQUIRED STEPS:")
+            logger("   1. Run MT5 as Administrator")
+            logger("   2. Login to your trading account")
+            logger("   3. Enable AutoTrading in MT5")
+            logger("   4. Ensure Python and MT5 are same architecture (64-bit)")
             return False
             
-    except ImportError:
-        logger("❌ MetaTrader5 library not available in this environment")
-        logger("💡 Using mock MT5 for demonstration purposes")
-        return False
-            
     except Exception as e:
-        logger(f"❌ Unexpected error during MT5 connection: {str(e)}")
+        logger(f"❌ MT5 connection error: {str(e)}")
         return False
 
 
 def check_mt5_status() -> bool:
-    """Check current MT5 connection status"""
+    """Check current MT5 connection status for live trading"""
     try:
-        # Using mock MT5 for Replit environment
-        global mt5
-        
-        # Test with a simple account info call
         account_info = mt5.account_info()
         if account_info and account_info.trade_allowed:
             return True
@@ -104,18 +96,15 @@ def check_mt5_status() -> bool:
 
 
 def get_symbols() -> List[str]:
-    """Get available symbols from MT5 with error handling"""
+    """Get available symbols from real MT5"""
     try:
-        # Using mock MT5 for Replit environment
-        global mt5
-        
         symbols = mt5.symbols_get()
         if symbols:
             symbol_names = [symbol.name for symbol in symbols if symbol.visible]
-            logger(f"📊 Found {len(symbol_names)} available symbols")
+            logger(f"📊 Found {len(symbol_names)} live trading symbols")
             return symbol_names
         else:
-            logger("⚠️ No symbols found or MT5 not connected")
+            logger("⚠️ No symbols found - check MT5 connection")
             return []
     except Exception as e:
         logger(f"❌ Error getting symbols: {str(e)}")
@@ -123,30 +112,28 @@ def get_symbols() -> List[str]:
 
 
 def validate_and_activate_symbol(symbol: str) -> Optional[str]:
-    """Validate and activate symbol in MT5"""
+    """Validate and activate symbol in MT5 for live trading"""
     try:
-        # Check if symbol exists
         symbol_info = mt5.symbol_info(symbol)
         if not symbol_info:
             logger(f"❌ Symbol {symbol} not found")
             return None
             
-        # Check if symbol is visible in Market Watch
         if not symbol_info.visible:
-            logger(f"⚠️ Symbol {symbol} not visible, attempting to activate...")
+            logger(f"⚠️ Activating symbol {symbol}...")
             if mt5.symbol_select(symbol, True):
-                logger(f"✅ Symbol {symbol} activated successfully")
+                logger(f"✅ Symbol {symbol} activated")
             else:
                 logger(f"❌ Failed to activate symbol {symbol}")
                 return None
                 
-        # Verify symbol is ready for trading
+        # Verify live quotes
         tick = mt5.symbol_info_tick(symbol)
         if not tick or tick.bid == 0 or tick.ask == 0:
-            logger(f"⚠️ No quotes available for {symbol}")
+            logger(f"⚠️ No live quotes for {symbol}")
             return None
             
-        logger(f"✅ Symbol {symbol} validated and ready")
+        logger(f"✅ Symbol {symbol} ready for live trading")
         return symbol
         
     except Exception as e:
@@ -155,11 +142,11 @@ def validate_and_activate_symbol(symbol: str) -> Optional[str]:
 
 
 def detect_gold_symbol() -> Optional[str]:
-    """Enhanced gold symbol detection with multiple variations"""
+    """Detect gold symbol for live trading"""
     try:
         gold_variations = [
             "XAUUSD", "GOLD", "GOUSD", "XAU_USD", "XAU/USD",
-            "GOLDUSD", "Gold", "gold", "GoldSpot", "SPOT_GOLD"
+            "GOLDUSD", "Gold", "GoldSpot", "SPOT_GOLD"
         ]
         
         available_symbols = get_symbols()
@@ -168,18 +155,17 @@ def detect_gold_symbol() -> Optional[str]:
             if gold_var in available_symbols:
                 validated = validate_and_activate_symbol(gold_var)
                 if validated:
-                    logger(f"🥇 Gold symbol detected: {validated}")
+                    logger(f"🥇 Live gold symbol: {validated}")
                     return validated
                     
-        # If no exact match, search for symbols containing "XAU" or "GOLD"
         for symbol in available_symbols:
             if any(term in symbol.upper() for term in ["XAU", "GOLD"]):
                 validated = validate_and_activate_symbol(symbol)
                 if validated:
-                    logger(f"🥇 Gold symbol found: {validated}")
+                    logger(f"🥇 Live gold symbol found: {validated}")
                     return validated
                     
-        logger("⚠️ No gold symbol found")
+        logger("⚠️ No gold symbol available")
         return None
         
     except Exception as e:
@@ -188,49 +174,43 @@ def detect_gold_symbol() -> Optional[str]:
 
 
 def get_symbol_suggestions() -> List[str]:
-    """Get suggested trading symbols with validation"""
+    """Get real trading symbol suggestions"""
     try:
-        default_symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
+        major_symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
         available_symbols = get_symbols()
         
         suggestions = []
         
-        # Add default symbols if available
-        for symbol in default_symbols:
+        for symbol in major_symbols:
             if symbol in available_symbols:
                 validated = validate_and_activate_symbol(symbol)
                 if validated:
                     suggestions.append(validated)
                     
-        # Add gold if available
         gold_symbol = detect_gold_symbol()
         if gold_symbol and gold_symbol not in suggestions:
             suggestions.append(gold_symbol)
             
-        # Add some popular major pairs if not already included
-        major_pairs = ["EURGBP", "EURJPY", "GBPJPY", "USDCHF", "NZDUSD"]
-        for symbol in major_pairs:
-            if len(suggestions) >= 10:  # Limit suggestions
+        cross_pairs = ["EURGBP", "EURJPY", "GBPJPY", "USDCHF", "NZDUSD"]
+        for symbol in cross_pairs:
+            if len(suggestions) >= 10:
                 break
             if symbol in available_symbols and symbol not in suggestions:
                 validated = validate_and_activate_symbol(symbol)
                 if validated:
                     suggestions.append(validated)
                     
-        logger(f"💡 Symbol suggestions: {suggestions}")
+        logger(f"💡 Live trading symbols: {suggestions}")
         return suggestions
         
     except Exception as e:
         logger(f"❌ Error getting symbol suggestions: {str(e)}")
-        return ["EURUSD", "GBPUSD", "USDJPY"]  # Fallback
+        return ["EURUSD", "GBPUSD", "USDJPY"]
 
 
 def get_account_info() -> Optional[Dict[str, Any]]:
-    """Get comprehensive account information"""
+    """Get real account information"""
     try:
-        # Using mock MT5 for Replit environment
-        global mt5
-        
         account_info = mt5.account_info()
         if not account_info:
             return None
@@ -255,11 +235,8 @@ def get_account_info() -> Optional[Dict[str, Any]]:
 
 
 def get_positions() -> List[Any]:
-    """Get current open positions"""
+    """Get current live positions"""
     try:
-        # Using mock MT5 for Replit environment
-        global mt5
-        
         positions = mt5.positions_get()
         if positions is None:
             return []
