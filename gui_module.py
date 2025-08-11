@@ -145,7 +145,7 @@ class TradingBotGUI:
         self.sl_entry.insert(0, "10")
         self.sl_entry.grid(row=0, column=0, padx=(0, 2))
         
-        self.sl_unit_combo = ttk.Combobox(sl_frame, values=TP_SL_UNITS,
+        self.sl_unit_combo = ttk.Combobox(sl_frame, values=TP_SL_UNITS, 
                                          state="readonly", width=8)
         self.sl_unit_combo.set("pips")
         self.sl_unit_combo.grid(row=0, column=1)

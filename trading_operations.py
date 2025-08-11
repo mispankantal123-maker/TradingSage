@@ -37,15 +37,19 @@ def calculate_pip_value(symbol: str, lot_size: float) -> float:
         return 1.0
 
 
-def parse_tp_sl_input(input_value: str, unit: str, symbol: str, order_type: str, current_price: float) -> float:
-    """Parse and convert TP/SL input to absolute price"""
+def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_type: str, current_price: float, lot_size: float = 0.01) -> float:
+    """COMPREHENSIVE: Calculate TP/SL for all modes: pips, price, percentage, money"""
     try:
         if not input_value or input_value.strip() == "0":
             return 0.0
             
         value = float(input_value.strip())
+        if value == 0:
+            return 0.0
         
         symbol_info = mt5.symbol_info(symbol)
+        account_info = mt5.account_info()
+        
         if not symbol_info:
             logger(f"❌ Cannot get symbol info for {symbol}")
             return 0.0
@@ -53,39 +57,70 @@ def parse_tp_sl_input(input_value: str, unit: str, symbol: str, order_type: str,
         point = getattr(symbol_info, 'point', 0.00001)
         digits = getattr(symbol_info, 'digits', 5)
         
+        # Determine direction (TP positive, SL negative input)
+        is_tp = value > 0
+        abs_value = abs(value)
+        
         if unit.lower() == "pips":
-            # CRITICAL FIX: Correct TP/SL direction for all orders
-            pip_value = point * 10 if "JPY" in symbol else point * 10
+            # Mode 1: PIPS - Market pips calculation
+            pip_multiplier = 10 if "JPY" in symbol else 10
+            distance = abs_value * point * pip_multiplier
             
-            # Determine if this is TP or SL based on sign
-            is_tp = value > 0
-            abs_value = abs(value)
+        elif unit.lower() == "price":
+            # Mode 2: PRICE - Direct market price
+            return round(value, digits)
             
-            if order_type.upper() == "BUY":
-                if is_tp:  # TP should be ABOVE entry for BUY
-                    target_price = current_price + (abs_value * pip_value)
-                else:  # SL should be BELOW entry for BUY
-                    target_price = current_price - (abs_value * pip_value)
-            else:  # SELL
-                if is_tp:  # TP should be BELOW entry for SELL
-                    target_price = current_price - (abs_value * pip_value)
-                else:  # SL should be ABOVE entry for SELL
-                    target_price = current_price + (abs_value * pip_value)
-                    
-        elif unit.lower() == "points":
-            # Convert points to price
-            if order_type.upper() == "BUY":
-                target_price = current_price + (value * point)
-            else:
-                target_price = current_price - (value * point)
+        elif unit.lower() in ["percent", "percentage", "%"]:
+            # Mode 3: PERCENTAGE - Based on account balance
+            if not account_info:
+                logger(f"❌ Cannot get account info for percentage calculation")
+                return 0.0
                 
-        else:  # Absolute price
-            target_price = value
+            balance = account_info.balance
+            percent_amount = balance * (abs_value / 100)  # Amount in currency
             
-        return round(target_price, digits)
+            # Convert to price distance based on lot size and pip value
+            pip_value = calculate_pip_value(symbol, lot_size)
+            if pip_value <= 0:
+                pip_value = 10.0  # Fallback
+                
+            pips_distance = percent_amount / pip_value
+            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            
+        elif unit.lower() == "money":
+            # Mode 4: MONEY - Fixed currency amount for TP/SL
+            money_amount = abs_value  # Direct currency amount
+            
+            # Convert money to price distance
+            pip_value = calculate_pip_value(symbol, lot_size) 
+            if pip_value <= 0:
+                pip_value = 10.0  # Fallback
+                
+            pips_distance = money_amount / pip_value
+            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            
+        else:
+            # Default: treat as direct price
+            return round(value, digits)
+        
+        # Apply correct direction based on order type
+        if order_type.upper() == "BUY":
+            if is_tp:  # TP above entry for BUY
+                target_price = current_price + distance
+            else:  # SL below entry for BUY  
+                target_price = current_price - distance
+        else:  # SELL
+            if is_tp:  # TP below entry for SELL
+                target_price = current_price - distance
+            else:  # SL above entry for SELL
+                target_price = current_price + distance
+        
+        result = round(target_price, digits)
+        logger(f"💰 TP/SL Calc: {unit}={value} → Price={result:.{digits}f} (Entry={current_price:.{digits}f})")
+        return result
         
     except Exception as e:
-        logger(f"❌ Error parsing TP/SL input: {str(e)}")
+        logger(f"❌ Error calculating TP/SL ({unit}): {str(e)}")
         return 0.0
 
 
@@ -502,18 +537,38 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         except:
             pass
         
-        # CRITICAL FIX: Calculate TP/SL prices with correct direction
-        symbol_info = mt5.symbol_info(symbol)
-        point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+        # ENHANCED: Get TP/SL settings from GUI with all 4 calculation modes
+        tp_value = str(tp_pips)
+        sl_value = str(sl_pips)
+        tp_unit = "pips"
+        sl_unit = "pips"
         
-        if action.upper() == "BUY":
-            tp_price = round(current_price + (tp_pips * point), symbol_info.digits if symbol_info else 3)
-            sl_price = round(current_price - (sl_pips * point), symbol_info.digits if symbol_info else 3)
-        else:  # SELL - CORRECTED LOGIC
-            tp_price = round(current_price - (tp_pips * point), symbol_info.digits if symbol_info else 3)  # TP BELOW entry for SELL
-            sl_price = round(current_price + (sl_pips * point), symbol_info.digits if symbol_info else 3)  # SL ABOVE entry for SELL
-            
-        logger(f"🔧 Direct TP/SL calculation: Entry={current_price}, TP={tp_price}, SL={sl_price}")
+        # Get GUI settings with comprehensive mode support
+        try:
+            import __main__
+            if hasattr(__main__, 'gui') and __main__.gui:
+                gui_tp = __main__.gui.tp_entry.get()
+                gui_sl = __main__.gui.sl_entry.get()
+                gui_tp_unit = __main__.gui.tp_unit_combo.get()
+                gui_sl_unit = __main__.gui.sl_unit_combo.get()
+                
+                if gui_tp and gui_tp.strip():
+                    tp_value = gui_tp.strip()
+                    tp_unit = gui_tp_unit if gui_tp_unit else "pips"
+                if gui_sl and gui_sl.strip():
+                    sl_value = gui_sl.strip()
+                    sl_unit = gui_sl_unit if gui_sl_unit else "pips"
+        except:
+            pass
+        
+        # Calculate TP/SL with comprehensive 4-mode support
+        tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
+        sl_price = calculate_tp_sl_all_modes(f"-{sl_value}", sl_unit, symbol, action, current_price, lot_size)
+        
+        logger(f"🔧 Enhanced TP/SL calculation:")
+        logger(f"   TP: {tp_value} {tp_unit} → {tp_price}")
+        logger(f"   SL: {sl_value} {sl_unit} → {sl_price}")
+        logger(f"   Entry: {current_price}")
         
         logger(f"🎯 Executing {action} signal for {symbol}")
         logger(f"📋 Using strategy: {current_strategy}")

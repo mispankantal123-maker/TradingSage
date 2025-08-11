@@ -51,7 +51,7 @@ DEFAULT_PARAMS = {
 }
 
 # TP/SL Unit Options - Enhanced with percentage support
-TP_SL_UNITS = ["pips", "points", "price", "balance%", "equity%"]
+TP_SL_UNITS = ["pips", "price", "percent", "money"]
 
 # Balance percentage settings
 BALANCE_PERCENTAGE_SETTINGS = {
