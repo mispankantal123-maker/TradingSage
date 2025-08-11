@@ -283,9 +283,13 @@ class TradingBotGUI:
         main_frame.columnconfigure(0, minsize=350)
         main_frame.columnconfigure(1, weight=1)
 
-        # Initial log message
-        self.log("🚀 Trading Bot GUI initialized successfully")
-        self.log("💡 Click 'Connect MT5' to establish connection")
+        # Initialize log first, then add messages
+        try:
+            self.log("🚀 Trading Bot GUI initialized successfully")
+            self.log("💡 Click 'Connect MT5' to establish connection")
+        except:
+            # Fallback if log not ready
+            print("🚀 Trading Bot GUI initialized successfully")
 
     def auto_connect_mt5(self):
         """Enhanced auto-connection on startup with better error handling"""
