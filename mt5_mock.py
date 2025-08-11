@@ -58,6 +58,8 @@ class Position(NamedTuple):
     price_current: float
     profit: float
     comment: str = "Mock Position"
+    tp: float = 0.0  # Take Profit
+    sl: float = 0.0  # Stop Loss
 
 
 # Global state for mock
@@ -223,15 +225,42 @@ def copy_rates_from_pos(symbol: str, timeframe, start_pos: int, count: int) -> O
 
 
 def order_send(request: dict) -> dict:
-    """Mock order sending"""
+    """Mock order sending with TP/SL support"""
     if not _connected:
         return {"retcode": 10004, "comment": "Not connected"}
     
-    # Simulate successful order
+    # Simulate successful order with TP/SL tracking
     ticket = random.randint(100000, 999999)
+    
+    # Extract TP/SL from request
+    tp_price = request.get('tp', 0.0)
+    sl_price = request.get('sl', 0.0)
     
     logger(f"🎯 Mock Order Sent: {request.get('action')} {request.get('symbol')} "
            f"{request.get('volume')} lots at {request.get('price', 'market')}")
+    
+    # Create position with TP/SL
+    symbol = request.get('symbol')
+    order_type = request.get('type', 0)
+    volume = request.get('volume', 0.01)
+    price = request.get('price', 0.0)
+    
+    # Add position to global state with TP/SL
+    if symbol in _symbols_data:
+        position = Position(
+            ticket=ticket,
+            symbol=symbol,
+            type=order_type,
+            volume=volume,
+            price_open=price,
+            price_current=price,
+            profit=0.0,
+            comment="Mock Auto Trade",
+            tp=tp_price,
+            sl=sl_price
+        )
+        _positions.append(position)
+        logger(f"✅ Position created with TP: {tp_price:.5f}, SL: {sl_price:.5f}")
     
     return {
         "retcode": 10009,  # TRADE_RETCODE_DONE
@@ -248,12 +277,14 @@ def order_send(request: dict) -> dict:
 
 
 def positions_get(symbol: str = None) -> Optional[List[Position]]:
-    """Mock positions"""
+    """Mock positions with TP/SL support"""
     if not _connected:
         return None
     
-    # Return empty list for mock (no open positions)
-    return []
+    # Return positions created by order_send, filtered by symbol if specified
+    if symbol:
+        return [pos for pos in _positions if pos.symbol == symbol]
+    return _positions
 
 
 def orders_get(symbol: str = None) -> Optional[List]:

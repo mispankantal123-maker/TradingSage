@@ -157,6 +157,13 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Auto Spread Detection**: Live market watch integration for dynamic spread limits
 - ✅ **Production Ready**: All syntax errors resolved, comprehensive testing completed
 
+### TP/SL POSITION TRACKING FIX (January 2025)
+- ✅ **Mock Position TP/SL**: Enhanced mock MT5 to store TP/SL in positions
+- ✅ **GUI Position Display**: Added TP/SL columns to positions tree view
+- ✅ **Order Integration**: TP/SL values properly passed to MT5 order execution
+- ✅ **Position Monitoring**: Real-time TP/SL display in GUI positions panel
+- ✅ **Live Trading Ready**: Complete TP/SL integration for Windows MT5
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5
