@@ -71,21 +71,21 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             return round(value, digits)
             
         elif unit.lower() in ["percent", "percentage", "%"]:
-            # Mode 3: PERCENTAGE - Based on account balance
-            if not account_info:
-                logger(f"❌ Cannot get account info for percentage calculation")
-                return 0.0
-                
-            balance = account_info.balance
-            percent_amount = balance * (abs_value / 100)  # Amount in currency
+            # Mode 3: PERCENTAGE - Based on entry price percentage 
+            # This is what user expects when they select "percent"
+            percentage = abs_value
             
-            # Convert to price distance based on lot size and pip value
-            pip_value = calculate_pip_value(symbol, lot_size)
-            if pip_value <= 0:
-                pip_value = 10.0  # Fallback
-                
-            pips_distance = percent_amount / pip_value
-            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            # Calculate percentage-based TP/SL directly from current price
+            if is_tp:  # Take Profit
+                if order_type.upper() == "BUY":
+                    return current_price * (1 + percentage / 100)  # TP above entry
+                else:  # SELL
+                    return current_price * (1 - percentage / 100)  # TP below entry
+            else:  # Stop Loss
+                if order_type.upper() == "BUY":
+                    return current_price * (1 - percentage / 100)  # SL below entry
+                else:  # SELL
+                    return current_price * (1 + percentage / 100)  # SL above entry
             
         elif unit.lower() == "money":
             # Mode 4: MONEY - Fixed currency amount for TP/SL
@@ -547,6 +547,7 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
             pass
         
         # ENHANCED: Get TP/SL settings from GUI with all 4 calculation modes
+        # Start with strategy defaults as fallback
         tp_value = str(tp_pips)
         sl_value = str(sl_pips)
         tp_unit = "pips"
@@ -561,14 +562,40 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
                 gui_tp_unit = __main__.gui.tp_unit_combo.get()
                 gui_sl_unit = __main__.gui.sl_unit_combo.get()
                 
+                logger(f"🔍 GUI: Reading TP/SL settings:")
+                logger(f"   TP: {gui_tp} | Unit: {gui_tp_unit}")
+                logger(f"   SL: {gui_sl} | Unit: {gui_sl_unit}")
+                
+                # CRITICAL FIX: Map GUI display names to internal calculation names
+                unit_mapping = {
+                    "pips": "pips",
+                    "price": "price", 
+                    "percent": "percent",
+                    "percent (balance)": "balance%",
+                    "percent (equity)": "equity%",
+                    "balance%": "balance%",
+                    "equity%": "equity%",
+                    "money": "money"
+                }
+                
+                # ALWAYS use GUI values if available - override strategy defaults
                 if gui_tp and gui_tp.strip():
                     tp_value = gui_tp.strip()
-                    tp_unit = gui_tp_unit if gui_tp_unit else "pips"
                 if gui_sl and gui_sl.strip():
                     sl_value = gui_sl.strip()
-                    sl_unit = gui_sl_unit if gui_sl_unit else "pips"
-        except:
-            pass
+                    
+                # CRITICAL: Always use GUI units - this was the missing piece!
+                if gui_tp_unit:
+                    tp_unit = unit_mapping.get(gui_tp_unit, gui_tp_unit)
+                if gui_sl_unit:
+                    sl_unit = unit_mapping.get(gui_sl_unit, gui_sl_unit)
+                    
+                logger(f"✅ Final TP/SL settings:")
+                logger(f"   TP: {tp_value} {tp_unit}")
+                logger(f"   SL: {sl_value} {sl_unit}")
+                logger(f"   GUI Override: TP_unit={gui_tp_unit} -> {tp_unit}, SL_unit={gui_sl_unit} -> {sl_unit}")
+        except Exception as e:
+            logger(f"⚠️ GUI settings read error: {e}")
         
         # Calculate TP/SL with comprehensive 4-mode support
         tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
@@ -612,9 +639,14 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
                 sl_price = round(current_price + (pip_distance * point), symbol_info.digits if symbol_info else 3)
         
         logger(f"🔧 Enhanced TP/SL calculation:")
-        logger(f"   TP: {tp_value} {tp_unit} → {tp_price}")
-        logger(f"   SL: {sl_value} {sl_unit} → {sl_price}")
-        logger(f"   Entry: {current_price}")
+        logger(f"   TP: {tp_value} {tp_unit} → {tp_price:.2f}")
+        logger(f"   SL: {sl_value} {sl_unit} → {sl_price:.2f}")
+        logger(f"   Entry: {current_price:.2f}")
+        
+        # VERIFICATION: Log calculation type for debugging
+        if tp_unit == "percent":
+            expected_tp = current_price * (1 + float(tp_value)/100) if action.upper() == "BUY" else current_price * (1 - float(tp_value)/100)
+            logger(f"   🔍 Expected TP for {tp_value}% {action}: {expected_tp:.2f}")
         
         # CRITICAL: Ensure TP/SL values are valid for Windows MT5
         if tp_price > 0 and sl_price > 0:

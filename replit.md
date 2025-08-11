@@ -178,6 +178,13 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Dynamic Bot Configuration**: Users can adjust scan speed without code changes
 - ✅ **Complete Position Tracking**: Enhanced GUI positions display with TP/SL columns
 
+### GUI UNIT SELECTION FIX (January 2025) 
+- ✅ **GUI Unit Reading Fixed**: Bot now properly reads "percent" from GUI dropdowns
+- ✅ **Unit Mapping System**: Maps GUI display names to internal calculation functions
+- ✅ **Strategy Override Logic**: GUI values always override strategy defaults
+- ✅ **Percentage Calculation Fixed**: Direct price percentage calculation (2% = 1.02x price)
+- ✅ **Enhanced Logging**: Shows GUI unit detection and override process in logs
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5

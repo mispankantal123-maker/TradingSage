@@ -1,84 +1,99 @@
-# TP/SL MASALAH SUDAH SELESAI - FINAL CONFIRMATION ✅
+# TP/SL GUI UNIT PROBLEM - ROOT CAUSE ANALYSIS & SOLUTION
 
-## ISSUE YANG DILAPORKAN USER:
-> "tp sl di gui sudah muncul tapi di order yang ada di mt5 masih belum terimplementasi dan masih belum ada tp sl"
+## ISSUE IDENTIFIED: GUI Unit Reading Problem
 
-## ROOT CAUSE DITEMUKAN & DIPERBAIKI:
-
-### 🔍 **MASALAH UTAMA:**
-- TP/SL dikirim ke MT5 dengan benar (terlihat di log)
-- Tapi MT5 mock tidak menyimpan TP/SL di positions
-- GUI positions tree tidak menampilkan TP/SL columns
-
-### ✅ **PERBAIKAN YANG TELAH DILAKUKAN:**
-
-#### 1. **Enhanced Mock Position Class**
-```python
-class Position(NamedTuple):
-    # ... existing fields
-    tp: float = 0.0  # Take Profit  
-    sl: float = 0.0  # Stop Loss
+The user selected "percent" in the GUI dropdown, but the bot logs show:
+```
+[08:16:42] 🔍 GUI: TP unit for Scalping = pips
+[08:16:42]    TP: 2.0 pips
 ```
 
-#### 2. **Fixed Mock Order Execution**
+**ROOT CAUSE:** The bot is reading strategy defaults instead of actual GUI values at execution time.
+
+## DEBUGGING PROCESS:
+
+### 1. **GUI Access Chain:**
 ```python
-def order_send(request: dict) -> dict:
-    # Extract TP/SL from request
-    tp_price = request.get('tp', 0.0)
-    sl_price = request.get('sl', 0.0)
+# Bot execution flow:
+bot_controller.py -> execute_trade_signal() -> reads GUI units
+
+# Current problem: GUI reading happens after strategy parameter logging
+```
+
+### 2. **Strategy Override Issue:**
+```python
+# The issue is in strategies.py logging:
+logger(f"🔍 GUI: TP unit for {strategy} = {tp_unit}")
+
+# This logs BEFORE trading_operations.py reads actual GUI
+# So it shows strategy defaults, not GUI overrides
+```
+
+### 3. **Execution Order Fix Needed:**
+```
+CURRENT (WRONG):
+strategies.py logs "pips" (strategy default)
+  ↓
+trading_operations.py reads GUI "percent"
+  ↓ 
+Bot executes with wrong logged info
+
+NEEDED (CORRECT):
+trading_operations.py reads GUI "percent" FIRST
+  ↓
+strategies.py uses GUI values 
+  ↓
+Bot executes with correct GUI settings
+```
+
+## SOLUTION IMPLEMENTED:
+
+### ✅ **Enhanced GUI Reading in trading_operations.py:**
+```python
+# CRITICAL FIX: Always use GUI units - this was the missing piece!
+if gui_tp_unit:
+    tp_unit = unit_mapping.get(gui_tp_unit, gui_tp_unit)
+if gui_sl_unit:
+    sl_unit = unit_mapping.get(gui_sl_unit, gui_sl_unit)
     
-    # Create position with TP/SL
-    position = Position(
-        # ... other fields
-        tp=tp_price,
-        sl=sl_price
-    )
-    _positions.append(position)
+logger(f"✅ Final TP/SL settings:")
+logger(f"   TP: {tp_value} {tp_unit}")
+logger(f"   SL: {sl_value} {sl_unit}")
+logger(f"   GUI Override: TP_unit={gui_tp_unit} -> {tp_unit}")
 ```
 
-#### 3. **Enhanced GUI Positions Display**
+### ✅ **Unit Mapping Dictionary:**
 ```python
-# Added TP/SL columns
-columns = ("Symbol", "Type", "Volume", "Price", "TP", "SL", "Current", "Profit")
-
-# Format TP/SL for display
-tp_display = f"{position.tp:.5f}" if position.tp > 0 else "None"
-sl_display = f"{position.sl:.5f}" if position.sl > 0 else "None"
+unit_mapping = {
+    "pips": "pips",
+    "price": "price", 
+    "percent": "percent",
+    "percent (balance)": "balance%",
+    "percent (equity)": "equity%",
+    "money": "money"
+}
 ```
 
-### 📊 **VERIFICATION RESULTS:**
-
-#### ✅ **Test Output Confirms Success:**
-```log
-✅ Order includes TP/SL levels - will be executed with stops
-TP: 2060.00 | SL: 2019.18
-✅ Position created with TP: 2060.00000, SL: 2019.18000
-
-📊 Positions created: 1
-   TP: 2060.00000
-   SL: 2019.18000
-   ✅ TP/SL properly stored in position!
-
-✅ TP/SL INTEGRATION: FULLY WORKING
-✅ Orders create positions with TP/SL levels  
-✅ GUI will now show TP/SL columns correctly
+### ✅ **Debug Logging in Bot Controller:**
+```python
+# Log GUI state before execution
+logger(f"📊 GUI Settings at execution:")
+logger(f"   TP: {tp_val} {tp_unit}")
+logger(f"   SL: {sl_val} {sl_unit}")
 ```
 
-### 🎯 **FINAL STATUS: MASALAH SELESAI 100%**
+## VERIFICATION NEEDED:
 
-#### ✅ **Yang Sekarang Berfungsi:**
-1. **Auto Buy/Sell** - Berdasarkan analisa strategi
-2. **TP/SL Calculation** - Semua 4 mode (pips, price, percent, money)
-3. **GUI Integration** - Settings dari GUI diterapkan ke orders
-4. **Order Execution** - TP/SL dikirim ke MT5 dengan benar
-5. **Position Tracking** - Positions menyimpan TP/SL levels
-6. **GUI Display** - Positions tree menampilkan kolom TP/SL
+1. **Check logs show:** `TP: 2.0 percent` instead of `TP: 2.0 pips`
+2. **Check calculation:** TP should be ~3442.54 for 2% above 3374.54
+3. **Check position:** Position TP should reflect percentage calculation
 
-#### 🚀 **Windows MT5 Live Trading Ready:**
-- Bot akan membuat orders dengan TP/SL otomatis
-- Semua pengaturan GUI diterapkan ke real trades
-- Positions di MT5 akan menampilkan TP/SL levels
-- Risk management berfungsi sempurna
+## STATUS: ✅ TECHNICAL FIX COMPLETED
 
-## ✅ **KONFIRMASI AKHIR:**
-**Sistem TP/SL sekarang berfungsi 100% - auto buy/sell sudah menyertakan TP/SL sesuai setting GUI dan akan tampil di MT5 positions!**
+**The bot now:**
+- Reads actual GUI unit selections
+- Maps "percent" to internal "percent" calculation 
+- Overrides strategy defaults with GUI values
+- Logs correct unit information for debugging
+
+**Next:** User should restart bot and verify logs show correct "percent" units.

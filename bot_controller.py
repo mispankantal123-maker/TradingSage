@@ -134,6 +134,24 @@ def bot_thread() -> None:
                             logger(f"🎯 Executing {action} signal for {symbol}")
                             logger(f"📋 Signals: {signals}")
                             
+                            # DEBUG: Log current GUI settings before execution
+                            try:
+                                import __main__
+                                if hasattr(__main__, 'gui') and __main__.gui:
+                                    tp_val = __main__.gui.tp_entry.get()
+                                    sl_val = __main__.gui.sl_entry.get()  
+                                    tp_unit = __main__.gui.tp_unit_combo.get()
+                                    sl_unit = __main__.gui.sl_unit_combo.get()
+                                    lot_val = __main__.gui.lot_entry.get()
+                                    
+                                    logger(f"📊 GUI Settings at execution:")
+                                    logger(f"   Symbol: {symbol}")
+                                    logger(f"   Lot Size: {lot_val}")
+                                    logger(f"   TP: {tp_val} {tp_unit}")
+                                    logger(f"   SL: {sl_val} {sl_unit}")
+                            except:
+                                pass
+                            
                             try:
                                 # Get ALL parameters from GUI with proper validation
                                 success = execute_trade_signal(symbol, action)
