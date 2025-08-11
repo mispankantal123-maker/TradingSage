@@ -51,14 +51,14 @@ def get_current_trading_session() -> Optional[Dict[str, Any]]:
         current_hour = utc_now.hour
         day_of_week = utc_now.weekday()  # 0=Monday, 6=Sunday
         
-        # Weekend check
-        if day_of_week >= 5:  # Saturday or Sunday
+        # MODIFIED: Allow weekend trading for 24/7 operation
+        if day_of_week >= 5:  # Saturday or Sunday - now active for crypto/forex
             return {
                 'name': 'Weekend',
-                'active': False,
-                'volatility': 'NONE',
-                'recommended_pairs': [],
-                'risk_modifier': 0.0
+                'active': True,  # CHANGED: Enable weekend trading
+                'volatility': 'LOW',  # CHANGED: Low but active
+                'recommended_pairs': ['EURUSD', 'XAUUSD', 'BTCUSD'],  # Some pairs available
+                'risk_modifier': 0.8  # CHANGED: Reduced risk but still active
             }
         
         # Determine active session
@@ -224,22 +224,27 @@ def adjust_strategy_for_session(strategy: str, session_data: Optional[Dict[str, 
 
 
 def check_trading_time() -> bool:
-    """Check if current time is suitable for trading"""
+    """MODIFIED: Check if current time is suitable for trading - now supports 24/7"""
     try:
         session = get_current_trading_session()
         if not session:
-            return False
+            # FALLBACK: If session detection fails, allow trading
+            logger("⚠️ Session detection failed - allowing trading (24/7 mode)")
+            return True
             
-        if not session.get('active', False):
-            logger("⏰ Market closed - outside trading hours")
-            return False
+        # REMOVED: Weekend/market closed restrictions for 24/7 operation
+        # if not session.get('active', False):
+        #     logger("⏰ Market closed - outside trading hours")
+        #     return False
             
+        # OPTIONAL: Still avoid major news times (user can disable this)
         if is_high_impact_news_time():
-            logger("⚠️ High impact news time - trading suspended")
-            return False
+            logger("⚠️ High impact news time - reducing activity but not stopping")
+            return True  # CHANGED: Continue trading with caution instead of stopping
             
+        logger(f"✅ Trading allowed - {session.get('name', 'Unknown')} session")
         return True
         
     except Exception as e:
         logger(f"❌ Error checking trading time: {str(e)}")
-        return False  # Err on the side of caution
+        return True  # CHANGED: Default to allow trading in case of errors

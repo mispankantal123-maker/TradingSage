@@ -200,6 +200,14 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Reasonable Values**: No more extreme IDR values, proper risk management
 - ✅ **MT5 Integration**: Balance-based TP/SL properly sent to MT5 orders
 
+### 24/7 TRADING OPERATION (January 2025)
+- ✅ **Weekend Trading Enabled**: Weekend sessions now active for crypto/forex trading
+- ✅ **Time Restrictions Removed**: No more "Outside trading hours" blocking
+- ✅ **News Time Softened**: Major news times warn but don't stop trading
+- ✅ **Error Recovery Enhanced**: Defaults to allow trading if session detection fails
+- ✅ **Session-Based Risk**: Different risk modifiers per session but all active
+- ✅ **True 24/7 Operation**: Bot can now trade continuously without time-based pauses
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5
