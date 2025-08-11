@@ -41,6 +41,7 @@ class TradingBotGUI:
         
         # Initialize GUI states
         self.start_btn.config(state="disabled")
+        self.stop_btn.config(state="disabled")  # Disabled until bot is started
         self.close_btn.config(state="disabled") 
         self.emergency_btn.config(state="normal")
         
@@ -86,12 +87,16 @@ class TradingBotGUI:
         self.start_btn = ttk.Button(trading_frame, text="▶️ Start Bot", command=self.start_bot)
         self.start_btn.grid(row=0, column=0, padx=(0, 10))
         
+        # Stop Bot button (NEW)
+        self.stop_btn = ttk.Button(trading_frame, text="⏹️ Stop Bot", command=self.stop_bot)
+        self.stop_btn.grid(row=0, column=1, padx=(0, 10))
+        
         self.close_btn = ttk.Button(trading_frame, text="🔄 Close Positions", command=self.close_all_positions)
-        self.close_btn.grid(row=0, column=1, padx=(0, 10))
+        self.close_btn.grid(row=0, column=2, padx=(0, 10))
         
         self.emergency_btn = ttk.Button(trading_frame, text="🚨 EMERGENCY STOP", 
                                       command=self.emergency_stop, style="Emergency.TButton")
-        self.emergency_btn.grid(row=0, column=2, padx=(0, 10))
+        self.emergency_btn.grid(row=0, column=3, padx=(0, 10))
         
         # Configure emergency button style
         style.configure("Emergency.TButton", background="#d32f2f", foreground="white")
@@ -549,6 +554,7 @@ class TradingBotGUI:
             self.log("🚀 Starting automated trading bot...")
             self.bot_status_lbl.config(text="Bot: Starting... 🟡", foreground="orange")
             self.start_btn.config(state="disabled")
+            self.stop_btn.config(state="normal")  # Enable Stop Bot button
             
             # Validate parameters
             lot_size = self.get_current_lot_size()
@@ -559,6 +565,7 @@ class TradingBotGUI:
             if not symbol:
                 self.log("❌ Please select a symbol")
                 self.start_btn.config(state="normal")
+                self.stop_btn.config(state="disabled")
                 self.bot_status_lbl.config(text="Bot: Stopped 🔴", foreground="red")
                 return
             
@@ -585,7 +592,39 @@ class TradingBotGUI:
         except Exception as e:
             self.log(f"❌ Error starting bot: {str(e)}")
             self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
             self.bot_status_lbl.config(text="Bot: Error 🔴", foreground="red")
+    
+    def stop_bot(self):
+        """Stop the trading bot gracefully"""
+        try:
+            self.log("⏹️ Stopping trading bot...")
+            self.bot_status_lbl.config(text="Bot: Stopping... 🟡", foreground="orange")
+            
+            # Stop bot thread
+            import __main__
+            if hasattr(__main__, 'bot_running'):
+                __main__.bot_running = False
+                self.log("🔄 Bot stop signal sent")
+            
+            # Update GUI state
+            self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
+            self.bot_status_lbl.config(text="Bot: Stopped 🔴", foreground="red")
+            
+            self.log("✅ Trading bot stopped successfully!")
+            
+            # Send Telegram notification for bot stop
+            try:
+                notify_bot_status("STOPPED", f"Trading bot deactivated - Strategy: {self.current_strategy}")
+            except Exception as telegram_e:
+                self.log(f"⚠️ Telegram stop notification failed: {str(telegram_e)}")
+                
+        except Exception as e:
+            self.log(f"❌ Error stopping bot: {str(e)}")
+            # Restore button states on error
+            self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
     
     def emergency_stop(self):
         """Emergency stop all operations"""
@@ -596,6 +635,11 @@ class TradingBotGUI:
             import __main__
             if hasattr(__main__, 'bot_running'):
                 __main__.bot_running = False
+            
+            # Update button states
+            self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
+            self.bot_status_lbl.config(text="Bot: Emergency Stopped 🛑", foreground="red")
             
             # Close all positions
             self.close_all_positions()
