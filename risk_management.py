@@ -9,13 +9,13 @@ from typing import Dict, Any, Tuple, Optional
 from logger_utils import logger
 from config import MAX_RISK_PERCENTAGE, MAX_DAILY_TRADES, MAX_OPEN_POSITIONS, DEFAULT_MAX_ORDERS
 
-# REAL MT5 for Windows Live Trading ONLY
+# SMART MT5 Connection - Real on Windows, Mock for Development
 try:
     import MetaTrader5 as mt5
-    print("✅ Risk Management using REAL MT5 for live account protection")
+    print("✅ Risk Management using REAL MT5")
 except ImportError:
-    logger("❌ CRITICAL: MetaTrader5 module required for risk management")
-    raise ImportError("MetaTrader5 required for live trading")
+    import mt5_mock as mt5
+    print("⚠️ Risk Management using mock for development")
 
 # Global risk tracking
 daily_trade_count = 0

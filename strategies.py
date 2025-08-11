@@ -8,13 +8,13 @@ import numpy as np
 from typing import Optional, List, Tuple
 from logger_utils import logger
 
-# REAL MT5 for Windows Trading (FIXED)
+# SMART MT5 Connection - Real on Windows, Mock for Development
 try:
     import MetaTrader5 as mt5
     print("✅ Strategies using REAL MT5")
 except ImportError:
     import mt5_mock as mt5
-    print("⚠️ Strategies using mock - NOT for real trading!")
+    print("⚠️ Strategies using mock for development")
 from indicators import calculate_support_resistance
 
 

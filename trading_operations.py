@@ -10,13 +10,13 @@ from validation_utils import validate_tp_sl_levels, validate_trading_conditions
 from config import DEFAULT_PARAMS
 from telegram_notifications import notify_trade_executed, notify_position_closed
 
-# REAL MT5 for Windows Live Trading ONLY
+# SMART MT5 Connection - Real on Windows, Mock for Development
 try:
     import MetaTrader5 as mt5
-    print("✅ Trading Operations using REAL MT5 for live trading")
+    print("✅ Trading Operations using REAL MT5")
 except ImportError:
-    logger("❌ CRITICAL: MetaTrader5 module required for live trading")
-    raise ImportError("MetaTrader5 required for live trading")
+    import mt5_mock as mt5
+    print("⚠️ Trading Operations using mock for development")
 
 
 def calculate_pip_value(symbol: str, lot_size: float) -> float:

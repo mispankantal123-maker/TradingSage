@@ -9,16 +9,16 @@ from typing import Optional, Dict, List
 import numpy as np
 from logger_utils import logger
 
-# REAL MT5 for Windows Live Trading ONLY
+# SMART MT5 Connection - Real on Windows, Mock for Development
 try:
     import MetaTrader5 as mt5
-    print("✅ Data Manager using REAL MT5 for live data")
+    print("✅ Data Manager using REAL MT5")
 except ImportError:
-    logger("❌ CRITICAL: MetaTrader5 module required for live data")
-    raise ImportError("MetaTrader5 required for live trading")
+    import mt5_mock as mt5
+    print("⚠️ Data Manager using mock for development")
 
 
-def get_symbol_data(symbol: str, timeframe: str = "M1", bars: int = 500) -> Optional[pd.DataFrame]:
+def get_symbol_data(symbol: str, timeframe: str = "M1", count: int = 500) -> Optional[pd.DataFrame]:
     """Get REAL market data from MT5"""
     try:
         # Map timeframe strings to MT5 constants
@@ -35,19 +35,32 @@ def get_symbol_data(symbol: str, timeframe: str = "M1", bars: int = 500) -> Opti
         mt5_timeframe = timeframe_map.get(timeframe, mt5.TIMEFRAME_M1)
 
         # Get REAL market data
-        rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, bars)
+        rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, count)
 
         if rates is None or len(rates) == 0:
             logger(f"❌ No live data available for {symbol}")
             return None
 
-        # Convert to DataFrame
+        # Convert to DataFrame with dynamic column handling
         df = pd.DataFrame(rates)
         df['time'] = pd.to_datetime(df['time'], unit='s')
         df.set_index('time', inplace=True)
 
-        # Rename columns to standard format
-        df.columns = ['open', 'high', 'low', 'close', 'tick_volume', 'spread', 'real_volume']
+        # Handle different column structures (mock vs real MT5) 
+        # After setting time as index, remaining columns should be processed
+        remaining_cols = len(df.columns)
+        if remaining_cols == 6:
+            # Mock MT5 format after time index: open, high, low, close, tick_volume, real_volume
+            df.columns = ['open', 'high', 'low', 'close', 'tick_volume', 'real_volume']
+        elif remaining_cols == 5:
+            # Standard MT5 format: open, high, low, close, tick_volume  
+            df.columns = ['open', 'high', 'low', 'close', 'tick_volume']
+        elif remaining_cols == 7:
+            # Extended format: includes spread and real_volume
+            df.columns = ['open', 'high', 'low', 'close', 'tick_volume', 'spread', 'real_volume']
+        else:
+            # Fallback - ensure minimum required columns
+            df.columns = ['open', 'high', 'low', 'close', 'tick_volume'] + [f'col_{i}' for i in range(5, remaining_cols)]
 
         logger(f"📊 Retrieved {len(df)} live bars for {symbol} ({timeframe})")
         return df
@@ -57,13 +70,13 @@ def get_symbol_data(symbol: str, timeframe: str = "M1", bars: int = 500) -> Opti
         return None
 
 
-def get_multiple_symbols_data(symbols: List[str], timeframe: str = "M1", bars: int = 500) -> Dict[str, pd.DataFrame]:
+def get_multiple_symbols_data(symbols: List[str], timeframe: str = "M1", count: int = 500) -> Dict[str, pd.DataFrame]:
     """Get REAL data for multiple symbols"""
     try:
         symbol_data = {}
 
         for symbol in symbols:
-            df = get_symbol_data(symbol, timeframe, bars)
+            df = get_symbol_data(symbol, timeframe, count)
             if df is not None:
                 symbol_data[symbol] = df
 

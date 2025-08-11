@@ -122,8 +122,8 @@ def bot_thread() -> None:
                     logger("🛑 Bot stopped before data retrieval")
                     break
 
-                # Get data for all symbols
-                symbol_data = get_multiple_symbols_data(trading_symbols)
+                # Get data for all symbols - FIXED parameter
+                symbol_data = get_multiple_symbols_data(trading_symbols, count=500)
 
                 if not symbol_data:
                     logger("❌ No symbol data available, waiting...")
@@ -393,7 +393,7 @@ def run_single_analysis(symbol: str, strategy: str = None) -> Dict[str, Any]:
         logger(f"🔍 Running single analysis: {symbol} with {strategy}")
 
         # Get data
-        df = get_symbol_data(symbol)
+        df = get_symbol_data(symbol, count=500)
         if df is None:
             return {'error': 'No data available'}
 

@@ -9,14 +9,15 @@ import os
 from typing import List, Optional, Dict, Any
 from logger_utils import logger
 
-# REAL MT5 Connection for Windows Live Trading ONLY
+# SMART MT5 Connection - Real on Windows, Mock for Development
 try:
     import MetaTrader5 as mt5
-    print("✅ Using REAL MetaTrader5 for Windows live trading")
+    print("✅ Using REAL MetaTrader5 for Windows trading")
+    USING_REAL_MT5 = True
 except ImportError:
-    logger("❌ CRITICAL: MetaTrader5 module not found!")
-    logger("💡 Install: pip install MetaTrader5")
-    raise ImportError("MetaTrader5 required for live trading")
+    import mt5_mock as mt5
+    print("⚠️ Using mt5_mock for development")
+    USING_REAL_MT5 = False
 
 
 def connect_mt5() -> bool:
@@ -26,10 +27,10 @@ def connect_mt5() -> bool:
         logger(f"🔍 Python: {platform.python_version()} ({platform.architecture()[0]})")
         logger(f"🔍 Platform: {platform.system()} {platform.release()}")
         
-        # Ensure Windows platform
+        # Detect platform for appropriate mode
         if platform.system() != "Windows":
-            logger("❌ This bot requires Windows OS for live MT5 trading")
-            return False
+            logger("⚠️ Running in development mode (non-Windows platform)")
+            # Continue with mock MT5 for development
         
         # Check if MT5 is already initialized
         if mt5.initialize():

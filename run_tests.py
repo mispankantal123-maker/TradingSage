@@ -100,8 +100,8 @@ def test_data_fetching():
     try:
         from data_manager import get_symbol_data, validate_symbol_data
         
-        # Test single symbol data
-        df = get_symbol_data("EURUSD", count=100)
+        # Test single symbol data  
+        df = get_symbol_data("EURUSD", timeframe="M1", count=100)
         if df is None:
             logger("❌ Failed to fetch symbol data")
             return False
