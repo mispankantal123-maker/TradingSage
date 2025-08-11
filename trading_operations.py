@@ -106,20 +106,44 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     logger(f"❌ Cannot get symbol info for {symbol}")
                     return 0.0
                     
-                # CRITICAL FIX: Special handling for different asset classes
+                # UNIVERSAL ASSET CLASS SUPPORT - Contract specifications
                 symbol_upper = symbol.upper()
-                if 'XAU' in symbol_upper:  # Gold
+                
+                # PRECIOUS METALS
+                if any(metal in symbol_upper for metal in ['XAU', 'GOLD']):  # Gold
                     contract_size = 100    # Gold CFD = 100 oz
-                    point = 0.01          # Gold point = 0.01
-                    digits = 2            # Gold = 2 decimal places
-                elif 'BTC' in symbol_upper or 'ETH' in symbol_upper or 'LTC' in symbol_upper:  # Crypto
+                    point = 0.01
+                    digits = 2
+                elif any(metal in symbol_upper for metal in ['XAG', 'SILVER']):  # Silver
+                    contract_size = 5000   # Silver CFD = 5000 oz
+                    point = 0.001
+                    digits = 3
+                elif any(metal in symbol_upper for metal in ['XPT', 'PLATINUM']):  # Platinum
+                    contract_size = 100    # Platinum CFD = 100 oz
+                    point = 0.01
+                    digits = 2
+                    
+                # CRYPTOCURRENCIES
+                elif any(crypto in symbol_upper for crypto in ['BTC', 'BITCOIN', 'ETH', 'ETHEREUM', 'LTC', 'ADA', 'DOT', 'LINK', 'XRP', 'BCH']):
                     contract_size = 1      # Crypto CFD = 1 unit
-                    point = 0.01          # Crypto point = 0.01
-                    digits = 2            # Crypto = 2 decimal places
-                elif 'USD' in symbol_upper and ('OIL' in symbol_upper or 'WTI' in symbol_upper):  # Oil
+                    point = 0.01
+                    digits = 2
+                    
+                # COMMODITIES
+                elif any(oil in symbol_upper for oil in ['OIL', 'WTI', 'BRENT', 'USO', 'UKO']):  # Oil
                     contract_size = 1000   # Oil CFD = 1000 barrels
-                    point = 0.01          # Oil point = 0.01
-                    digits = 2            # Oil = 2 decimal places
+                    point = 0.01
+                    digits = 2
+                elif any(gas in symbol_upper for gas in ['NATGAS', 'GAS']):  # Natural Gas
+                    contract_size = 10000  # Gas CFD = 10000 MMBtu
+                    point = 0.001
+                    digits = 3
+                    
+                # INDICES
+                elif any(index in symbol_upper for index in ['US30', 'US500', 'NAS100', 'GER30', 'UK100', 'FRA40', 'AUS200', 'JPN225']):
+                    contract_size = 1      # Index CFD = 1 unit per point
+                    point = 1.0
+                    digits = 0
                 else:
                     contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
                     point = getattr(symbol_info, 'point', 0.00001)
@@ -728,49 +752,111 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
             digits = getattr(symbol_info, 'digits', 5)
             trade_stops_level = getattr(symbol_info, 'trade_stops_level', 0)
             
-            # Asset-specific validation with appropriate minimum distances
+            # UNIVERSAL SYMBOL SUPPORT - Comprehensive asset class detection
             symbol_upper = symbol.upper()
-            if 'XAU' in symbol_upper:  # Gold
-                point = 0.01  # Gold point value
-                digits = 2    # Gold digits
-                min_distance_pips = max(trade_stops_level, 100)  # Gold minimum 100 pips
-            elif 'BTC' in symbol_upper:  # Bitcoin
-                point = 0.01  # Bitcoin point value
-                digits = 2    # Bitcoin digits  
-                min_distance_pips = max(trade_stops_level, 50)   # Bitcoin minimum 50 pips ($500+ distance)
-            elif 'ETH' in symbol_upper:  # Ethereum
-                point = 0.01  # Ethereum point value
-                digits = 2    # Ethereum digits
-                min_distance_pips = max(trade_stops_level, 30)   # Ethereum minimum 30 pips
-            elif 'LTC' in symbol_upper or 'ADA' in symbol_upper or 'DOT' in symbol_upper:  # Other Crypto
-                point = 0.01  # Crypto point value
-                digits = 2    # Crypto digits
-                min_distance_pips = max(trade_stops_level, 25)   # Crypto minimum 25 pips
-            elif 'USD' in symbol_upper and ('OIL' in symbol_upper or 'WTI' in symbol_upper):  # Oil
-                point = 0.01  # Oil point value
-                digits = 2    # Oil digits
-                min_distance_pips = max(trade_stops_level, 20)   # Oil minimum 20 pips
-            elif 'JPY' in symbol_upper:  # JPY Pairs
-                min_distance_pips = max(trade_stops_level, 20)   # JPY minimum 20 pips
-            else:  # Standard Forex
-                min_distance_pips = max(trade_stops_level, 10)   # Forex minimum 10 pips
+            
+            # PRECIOUS METALS (100+ pips minimum)
+            if any(metal in symbol_upper for metal in ['XAU', 'GOLD']):  # Gold
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 100)
+            elif any(metal in symbol_upper for metal in ['XAG', 'SILVER']):  # Silver
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 50)
+            elif any(metal in symbol_upper for metal in ['XPT', 'PLATINUM']):  # Platinum
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 75)
+                
+            # CRYPTOCURRENCIES (25-50 pips minimum)
+            elif any(crypto in symbol_upper for crypto in ['BTC', 'BITCOIN']):  # Bitcoin
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 50)
+            elif any(crypto in symbol_upper for crypto in ['ETH', 'ETHEREUM']):  # Ethereum
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 30)
+            elif any(crypto in symbol_upper for crypto in ['LTC', 'ADA', 'DOT', 'LINK', 'XRP', 'BCH', 'EOS', 'TRX']):  # Other Crypto
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 25)
+                
+            # COMMODITIES (20-30 pips minimum)
+            elif any(oil in symbol_upper for oil in ['OIL', 'WTI', 'BRENT', 'USO', 'UKO']):  # Oil
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 20)
+            elif any(gas in symbol_upper for gas in ['NATGAS', 'GAS']):  # Natural Gas
+                point = 0.01
+                digits = 2
+                min_distance_pips = max(trade_stops_level, 30)
+                
+            # INDICES (1-5 points minimum)
+            elif any(index in symbol_upper for index in ['US30', 'US500', 'NAS100', 'SPX500', 'DOW']):  # Major US Indices
+                point = 1.0
+                digits = 0
+                min_distance_pips = max(trade_stops_level, 5)
+            elif any(index in symbol_upper for index in ['GER30', 'UK100', 'FRA40', 'ESP35', 'ITA40']):  # European Indices
+                point = 1.0
+                digits = 0
+                min_distance_pips = max(trade_stops_level, 3)
+            elif any(index in symbol_upper for index in ['AUS200', 'JPN225', 'HK50']):  # Asia-Pacific Indices
+                point = 1.0
+                digits = 0
+                min_distance_pips = max(trade_stops_level, 2)
+                
+            # FOREX PAIRS (10-20 pips minimum)
+            elif 'JPY' in symbol_upper:  # JPY pairs (special handling for Yen)
+                # Keep existing point/digits from symbol_info
+                min_distance_pips = max(trade_stops_level, 20)
+            elif any(major in symbol_upper for major in ['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD', 'USDCAD', 'USDCHF']):  # Major pairs
+                # Keep existing point/digits from symbol_info
+                min_distance_pips = max(trade_stops_level, 10)
+            elif any(cross in symbol_upper for cross in ['EURGBP', 'EURJPY', 'GBPJPY', 'AUDJPY', 'CADJPY']):  # Cross pairs
+                # Keep existing point/digits from symbol_info
+                min_distance_pips = max(trade_stops_level, 15)
+                
+            # STOCKS (dynamic based on price)
+            elif any(stock_suffix in symbol_upper for stock_suffix in ['.US', '_US', 'STOCK']):  # Stock symbols
+                # Dynamic minimum distance based on stock price
+                if current_price > 100:
+                    min_distance_pips = max(trade_stops_level, 100)  # $1.00 for high-price stocks
+                elif current_price > 10:
+                    min_distance_pips = max(trade_stops_level, 50)   # $0.50 for mid-price stocks
+                else:
+                    min_distance_pips = max(trade_stops_level, 10)   # $0.10 for low-price stocks
+                    
+            # DEFAULT FALLBACK (conservative 15 pips)
+            else:
+                # Keep existing point/digits from symbol_info for unknown symbols
+                min_distance_pips = max(trade_stops_level, 15)  # Conservative default
             
             min_distance_price = min_distance_pips * point
             
             logger(f"🔧 {symbol} Validation: Point={point}, Digits={digits}, Min Distance={min_distance_pips} pips")
         else:
-            # Enhanced fallback values based on asset type
+            # UNIVERSAL FALLBACK VALUES - Smart defaults for any symbol
             symbol_upper = symbol.upper()
-            if 'XAU' in symbol_upper or 'BTC' in symbol_upper or 'ETH' in symbol_upper:
+            
+            # High-value assets (Metals, Crypto, Indices)
+            if any(asset in symbol_upper for asset in ['XAU', 'XAG', 'XPT', 'BTC', 'ETH', 'LTC', 'US30', 'US500', 'NAS100', 'OIL']):
                 point = 0.01
                 digits = 2
-                min_distance_price = 1.0  # Large assets need bigger distance
+                min_distance_price = 1.0  # $1.00 minimum distance
+            # JPY pairs (3-digit precision)
+            elif 'JPY' in symbol_upper:
+                point = 0.001
+                digits = 3
+                min_distance_price = 0.02  # 20 pips for JPY
+            # Standard forex (5-digit precision)
             else:
                 point = 0.00001
                 digits = 5
-                min_distance_price = 0.0001
+                min_distance_price = 0.0001  # 10 pips for forex
             
-            logger(f"⚠️ Using fallback values for {symbol}: Point={point}, Digits={digits}")
+            logger(f"⚠️ Using smart fallback for {symbol}: Point={point}, Digits={digits}, MinDist=${min_distance_price}")
         
         # Validate and correct TP price
         if tp_price <= 0.0 or abs(tp_price - current_price) < min_distance_price:
