@@ -106,11 +106,20 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     logger(f"❌ Cannot get symbol info for {symbol}")
                     return 0.0
                     
-                # CRITICAL FIX: Special handling for Gold (XAUUSDm)
-                if 'XAU' in symbol.upper():
-                    contract_size = 100    # Gold CFD = 100 oz (not 100000)
+                # CRITICAL FIX: Special handling for different asset classes
+                symbol_upper = symbol.upper()
+                if 'XAU' in symbol_upper:  # Gold
+                    contract_size = 100    # Gold CFD = 100 oz
                     point = 0.01          # Gold point = 0.01
                     digits = 2            # Gold = 2 decimal places
+                elif 'BTC' in symbol_upper or 'ETH' in symbol_upper or 'LTC' in symbol_upper:  # Crypto
+                    contract_size = 1      # Crypto CFD = 1 unit
+                    point = 0.01          # Crypto point = 0.01
+                    digits = 2            # Crypto = 2 decimal places
+                elif 'USD' in symbol_upper and ('OIL' in symbol_upper or 'WTI' in symbol_upper):  # Oil
+                    contract_size = 1000   # Oil CFD = 1000 barrels
+                    point = 0.01          # Oil point = 0.01
+                    digits = 2            # Oil = 2 decimal places
                 else:
                     contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
                     point = getattr(symbol_info, 'point', 0.00001)
@@ -719,26 +728,49 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
             digits = getattr(symbol_info, 'digits', 5)
             trade_stops_level = getattr(symbol_info, 'trade_stops_level', 0)
             
-            # Special handling for Gold (XAUUSDm, XAUUSD, etc)
-            if 'XAU' in symbol.upper():
+            # Asset-specific validation with appropriate minimum distances
+            symbol_upper = symbol.upper()
+            if 'XAU' in symbol_upper:  # Gold
                 point = 0.01  # Gold point value
                 digits = 2    # Gold digits
                 min_distance_pips = max(trade_stops_level, 100)  # Gold minimum 100 pips
-            elif 'JPY' in symbol:
+            elif 'BTC' in symbol_upper:  # Bitcoin
+                point = 0.01  # Bitcoin point value
+                digits = 2    # Bitcoin digits  
+                min_distance_pips = max(trade_stops_level, 50)   # Bitcoin minimum 50 pips ($500+ distance)
+            elif 'ETH' in symbol_upper:  # Ethereum
+                point = 0.01  # Ethereum point value
+                digits = 2    # Ethereum digits
+                min_distance_pips = max(trade_stops_level, 30)   # Ethereum minimum 30 pips
+            elif 'LTC' in symbol_upper or 'ADA' in symbol_upper or 'DOT' in symbol_upper:  # Other Crypto
+                point = 0.01  # Crypto point value
+                digits = 2    # Crypto digits
+                min_distance_pips = max(trade_stops_level, 25)   # Crypto minimum 25 pips
+            elif 'USD' in symbol_upper and ('OIL' in symbol_upper or 'WTI' in symbol_upper):  # Oil
+                point = 0.01  # Oil point value
+                digits = 2    # Oil digits
+                min_distance_pips = max(trade_stops_level, 20)   # Oil minimum 20 pips
+            elif 'JPY' in symbol_upper:  # JPY Pairs
                 min_distance_pips = max(trade_stops_level, 20)   # JPY minimum 20 pips
-            else:
+            else:  # Standard Forex
                 min_distance_pips = max(trade_stops_level, 10)   # Forex minimum 10 pips
             
             min_distance_price = min_distance_pips * point
             
             logger(f"🔧 {symbol} Validation: Point={point}, Digits={digits}, Min Distance={min_distance_pips} pips")
         else:
-            # Fallback values
-            point = 0.01 if 'XAU' in symbol.upper() else 0.00001
-            digits = 2 if 'XAU' in symbol.upper() else 5
-            min_distance_price = 1.0 if 'XAU' in symbol.upper() else 0.0001
+            # Enhanced fallback values based on asset type
+            symbol_upper = symbol.upper()
+            if 'XAU' in symbol_upper or 'BTC' in symbol_upper or 'ETH' in symbol_upper:
+                point = 0.01
+                digits = 2
+                min_distance_price = 1.0  # Large assets need bigger distance
+            else:
+                point = 0.00001
+                digits = 5
+                min_distance_price = 0.0001
             
-            logger(f"⚠️ Using fallback values for {symbol}")
+            logger(f"⚠️ Using fallback values for {symbol}: Point={point}, Digits={digits}")
         
         # Validate and correct TP price
         if tp_price <= 0.0 or abs(tp_price - current_price) < min_distance_price:
