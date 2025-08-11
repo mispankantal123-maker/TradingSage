@@ -54,22 +54,23 @@ def parse_tp_sl_input(input_value: str, unit: str, symbol: str, order_type: str,
         digits = getattr(symbol_info, 'digits', 5)
         
         if unit.lower() == "pips":
-            # Convert pips to price
-            if "JPY" in symbol:
-                pip_value = point * 10  # For JPY pairs
-            else:
-                pip_value = point * 10  # For most forex pairs
-                
+            # CRITICAL FIX: Correct TP/SL direction for all orders
+            pip_value = point * 10 if "JPY" in symbol else point * 10
+            
+            # Determine if this is TP or SL based on sign
+            is_tp = value > 0
+            abs_value = abs(value)
+            
             if order_type.upper() == "BUY":
-                if value > 0:  # TP
-                    target_price = current_price + (value * pip_value)
-                else:  # SL (negative value)
-                    target_price = current_price + (value * pip_value)
+                if is_tp:  # TP should be ABOVE entry for BUY
+                    target_price = current_price + (abs_value * pip_value)
+                else:  # SL should be BELOW entry for BUY
+                    target_price = current_price - (abs_value * pip_value)
             else:  # SELL
-                if value > 0:  # TP
-                    target_price = current_price - (value * pip_value)
-                else:  # SL (negative value)
-                    target_price = current_price - (value * pip_value)
+                if is_tp:  # TP should be BELOW entry for SELL
+                    target_price = current_price - (abs_value * pip_value)
+                else:  # SL should be ABOVE entry for SELL
+                    target_price = current_price + (abs_value * pip_value)
                     
         elif unit.lower() == "points":
             # Convert points to price
@@ -172,30 +173,47 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
         if min_stops_level == 0:
             min_stops_level = 10 * point  # Default minimum distance
             
-        # Adjust TP/SL if too close
-        if sl_price > 0:
-            if action.upper() == "BUY":
-                min_sl = price - min_stops_level
-                if sl_price > min_sl:
-                    sl_price = round(min_sl, digits)
+        # CRITICAL FIX: Proper TP/SL direction and minimum distance validation
+        if action.upper() == "BUY":
+            # BUY: TP above price, SL below price
+            if tp_price > 0:
+                min_tp = price + min_stops_level
+                if tp_price < min_tp:
+                    tp_price = round(min_tp, digits)
+                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
+            if sl_price > 0:
+                max_sl = price - min_stops_level
+                if sl_price > max_sl:
+                    sl_price = round(max_sl, digits)
                     logger(f"⚠️ SL adjusted to minimum distance: {sl_price:.{digits}f}")
-            else:  # SELL
+        else:  # SELL
+            # SELL: TP below price, SL above price
+            if tp_price > 0:
+                max_tp = price - min_stops_level
+                if tp_price > max_tp:
+                    tp_price = round(max_tp, digits)
+                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
+            if sl_price > 0:
                 min_sl = price + min_stops_level
                 if sl_price < min_sl:
                     sl_price = round(min_sl, digits)
                     logger(f"⚠️ SL adjusted to minimum distance: {sl_price:.{digits}f}")
                     
-        if tp_price > 0:
-            if action.upper() == "BUY":
-                min_tp = price + min_stops_level
-                if tp_price < min_tp:
-                    tp_price = round(min_tp, digits)
-                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
-            else:  # SELL
-                min_tp = price - min_stops_level
-                if tp_price > min_tp:
-                    tp_price = round(min_tp, digits)
-                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
+        # Final validation - ensure TP/SL are on correct sides
+        if action.upper() == "BUY":
+            if tp_price > 0 and tp_price <= price:
+                tp_price = round(price + (20 * point), digits)
+                logger(f"🔧 TP corrected for BUY: {tp_price:.{digits}f}")
+            if sl_price > 0 and sl_price >= price:
+                sl_price = round(price - (20 * point), digits)
+                logger(f"🔧 SL corrected for BUY: {sl_price:.{digits}f}")
+        else:  # SELL
+            if tp_price > 0 and tp_price >= price:
+                tp_price = round(price - (20 * point), digits)
+                logger(f"🔧 TP corrected for SELL: {tp_price:.{digits}f}")
+            if sl_price > 0 and sl_price <= price:
+                sl_price = round(price + (20 * point), digits)
+                logger(f"🔧 SL corrected for SELL: {sl_price:.{digits}f}")
         
         # Determine best fill type for the symbol
         filling_mode = getattr(symbol_info, 'filling_mode', 0)
@@ -484,9 +502,18 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         except:
             pass
         
-        # Calculate TP/SL prices
-        tp_price = parse_tp_sl_input(str(tp_pips), "pips", symbol, action, current_price)
-        sl_price = parse_tp_sl_input(str(-sl_pips), "pips", symbol, action, current_price)  # Negative for SL
+        # CRITICAL FIX: Calculate TP/SL prices with correct direction
+        symbol_info = mt5.symbol_info(symbol)
+        point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+        
+        if action.upper() == "BUY":
+            tp_price = round(current_price + (tp_pips * point), symbol_info.digits if symbol_info else 3)
+            sl_price = round(current_price - (sl_pips * point), symbol_info.digits if symbol_info else 3)
+        else:  # SELL - CORRECTED LOGIC
+            tp_price = round(current_price - (tp_pips * point), symbol_info.digits if symbol_info else 3)  # TP BELOW entry for SELL
+            sl_price = round(current_price + (sl_pips * point), symbol_info.digits if symbol_info else 3)  # SL ABOVE entry for SELL
+            
+        logger(f"🔧 Direct TP/SL calculation: Entry={current_price}, TP={tp_price}, SL={sl_price}")
         
         logger(f"🎯 Executing {action} signal for {symbol}")
         logger(f"📋 Using strategy: {current_strategy}")
