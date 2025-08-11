@@ -1,0 +1,439 @@
+# --- Trading Strategies Module ---
+"""
+All trading strategies: Scalping, Intraday, Arbitrage, HFT
+"""
+
+import pandas as pd
+import numpy as np
+from typing import Optional, List, Tuple
+from logger_utils import logger
+
+try:
+    import MetaTrader5 as mt5
+except ImportError:
+    # Use mock MT5 for testing on non-Windows platforms
+    import mt5_mock as mt5
+from indicators import calculate_support_resistance
+
+
+def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional[str], List[str]]:
+    """Enhanced strategy execution with precise price analysis and validation"""
+    try:
+        if len(df) < 50:
+            logger(f"❌ Insufficient data for {symbol}: {len(df)} bars (need 50+)")
+            return None, [f"Insufficient data: {len(df)} bars"]
+        
+        # Get precision info from dataframe attributes or MT5
+        digits = df.attrs.get('digits', 5)
+        point = df.attrs.get('point', 0.00001)
+        
+        # Get real-time tick data with retry mechanism
+        current_tick = None
+        for tick_attempt in range(3):
+            current_tick = mt5.symbol_info_tick(symbol)
+            if current_tick and hasattr(current_tick, 'bid') and hasattr(current_tick, 'ask'):
+                if current_tick.bid > 0 and current_tick.ask > 0:
+                    break
+            else:
+                logger(f"⚠️ Tick attempt {tick_attempt + 1}: No valid tick for {symbol}")
+                import time
+                time.sleep(0.5)
+        
+        if not current_tick or not hasattr(current_tick, 'bid') or current_tick.bid <= 0:
+            logger(f"❌ Cannot get valid real-time tick for {symbol} after 3 attempts")
+            return None, [f"No valid tick data for {symbol}"]
+        
+        # Use most recent candle data
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        prev2 = df.iloc[-3] if len(df) > 3 else prev
+        
+        # Get precise current prices - MUST be defined early for all strategies
+        current_bid = round(current_tick.bid, digits)
+        current_ask = round(current_tick.ask, digits)
+        current_spread = round(current_ask - current_bid, digits)
+        current_price = round((current_bid + current_ask) / 2, digits)
+        
+        # Validate price precision
+        last_close = round(last['close'], digits)
+        last_high = round(last['high'], digits)
+        last_low = round(last['low'], digits)
+        last_open = round(last['open'], digits)
+        
+        action = None
+        signals = []
+        buy_signals = 0
+        sell_signals = 0
+        
+        # Enhanced price logging with precision
+        logger(f"📊 {symbol} Precise Data:")
+        logger(f"   📈 Candle: O={last_open:.{digits}f} H={last_high:.{digits}f} L={last_low:.{digits}f} C={last_close:.{digits}f}")
+        logger(f"   🎯 Real-time: Bid={current_bid:.{digits}f} Ask={current_ask:.{digits}f} Spread={current_spread:.{digits}f}")
+        logger(f"   💡 Current Price: {current_price:.{digits}f} (Mid-price)")
+        
+        # Price movement analysis
+        price_change = round(current_price - last_close, digits)
+        price_change_pips = abs(price_change) / point
+        logger(f"   📊 Price Movement: {price_change:+.{digits}f} ({price_change_pips:.1f} pips)")
+        
+        # Enhanced spread quality check
+        if any(precious in symbol for precious in ["XAU", "XAG", "GOLD", "SILVER"]):
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info:
+                point_value = getattr(symbol_info, 'point', 0.01)
+                spread_pips = current_spread / point_value
+                max_allowed_spread = 100.0  # More realistic for gold
+            else:
+                spread_pips = current_spread / 0.01  # Assume 0.01 point for gold
+                max_allowed_spread = 100.0
+        elif "JPY" in symbol:
+            spread_pips = current_spread / 0.01
+            max_allowed_spread = 8.0  # JPY pairs
+        else:
+            spread_pips = current_spread / 0.0001
+            max_allowed_spread = 5.0  # Major forex pairs
+        
+        spread_quality = "EXCELLENT" if spread_pips < max_allowed_spread * 0.3 else "GOOD" if spread_pips < max_allowed_spread * 0.6 else "FAIR" if spread_pips < max_allowed_spread * 0.8 else "POOR"
+        logger(f"   🎯 Spread Analysis: {spread_pips:.1f} pips ({spread_quality}) | Max: {max_allowed_spread}")
+        
+        # More lenient spread filtering - only skip if extremely wide
+        if spread_pips > max_allowed_spread:
+            logger(f"⚠️ Spread too wide ({spread_pips:.1f} pips > {max_allowed_spread}) - reducing targets")
+            spread_warning = True
+        else:
+            spread_warning = False
+        
+        # Route to specific strategy
+        if strategy == "Scalping":
+            return scalping_strategy(df, symbol, current_tick, digits, point)
+        elif strategy == "Intraday":
+            return intraday_strategy(df, symbol, current_tick, digits, point)
+        elif strategy == "Arbitrage":
+            return arbitrage_strategy(df, symbol, current_tick, digits, point)
+        elif strategy == "HFT":
+            return hft_strategy(df, symbol, current_tick, digits, point)
+        else:
+            logger(f"❌ Unknown strategy: {strategy}")
+            return None, [f"Unknown strategy: {strategy}"]
+            
+    except Exception as e:
+        logger(f"❌ Error in run_strategy: {str(e)}")
+        import traceback
+        logger(f"📝 Traceback: {traceback.format_exc()}")
+        return None, [f"Strategy error: {str(e)}"]
+
+
+def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, point: float) -> Tuple[Optional[str], List[str]]:
+    """Scalping strategy - Quick trades with tight targets"""
+    try:
+        signals = []
+        buy_signals = 0
+        sell_signals = 0
+        
+        # Use recent data
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        # Current prices
+        current_bid = round(current_tick.bid, digits)
+        current_ask = round(current_tick.ask, digits)
+        current_price = round((current_bid + current_ask) / 2, digits)
+        
+        # Scalping conditions - Fast EMA crossovers
+        if last['EMA8'] > last['EMA20'] and prev['EMA8'] <= prev['EMA20']:
+            signals.append("EMA8 crossed above EMA20 (Bullish)")
+            buy_signals += 1
+            
+        if last['EMA8'] < last['EMA20'] and prev['EMA8'] >= prev['EMA20']:
+            signals.append("EMA8 crossed below EMA20 (Bearish)")
+            sell_signals += 1
+        
+        # RSI conditions for scalping
+        if last['RSI'] < 30 and last['RSI'] > prev['RSI']:
+            signals.append("RSI oversold and recovering")
+            buy_signals += 1
+            
+        if last['RSI'] > 70 and last['RSI'] < prev['RSI']:
+            signals.append("RSI overbought and declining")
+            sell_signals += 1
+        
+        # MACD quick signals
+        if last['MACD'] > last['MACD_signal'] and prev['MACD'] <= prev['MACD_signal']:
+            signals.append("MACD bullish crossover")
+            buy_signals += 1
+            
+        if last['MACD'] < last['MACD_signal'] and prev['MACD'] >= prev['MACD_signal']:
+            signals.append("MACD bearish crossover")
+            sell_signals += 1
+        
+        # Price action - quick reversals
+        if last['close'] > last['BB_upper'] and prev['close'] <= prev['BB_upper']:
+            signals.append("Price broke above Bollinger Upper")
+            buy_signals += 1
+            
+        if last['close'] < last['BB_lower'] and prev['close'] >= prev['BB_lower']:
+            signals.append("Price broke below Bollinger Lower")
+            sell_signals += 1
+        
+        # Determine action
+        action = None
+        if buy_signals >= 2 and buy_signals > sell_signals:
+            action = "BUY"
+            logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals >= 2 and sell_signals > buy_signals:
+            action = "SELL"
+            logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
+        else:
+            logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need 2+ dominant)")
+        
+        return action, signals
+        
+    except Exception as e:
+        logger(f"❌ Scalping strategy error: {str(e)}")
+        return None, [f"Scalping error: {str(e)}"]
+
+
+def intraday_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, point: float) -> Tuple[Optional[str], List[str]]:
+    """Intraday strategy - Medium-term trend following"""
+    try:
+        signals = []
+        buy_signals = 0
+        sell_signals = 0
+        
+        # Use recent data
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        # Current prices
+        current_bid = round(current_tick.bid, digits)
+        current_ask = round(current_tick.ask, digits)
+        current_price = round((current_bid + current_ask) / 2, digits)
+        
+        # Trend following - EMA alignment
+        if last['EMA20'] > last['EMA50'] and last['EMA50'] > last['EMA200']:
+            if last['close'] > last['EMA20']:
+                signals.append("Strong uptrend - all EMAs aligned bullishly")
+                buy_signals += 2  # Strong signal
+                
+        if last['EMA20'] < last['EMA50'] and last['EMA50'] < last['EMA200']:
+            if last['close'] < last['EMA20']:
+                signals.append("Strong downtrend - all EMAs aligned bearishly")
+                sell_signals += 2  # Strong signal
+        
+        # RSI trend confirmation
+        if 30 < last['RSI'] < 70:  # Avoid extremes for intraday
+            if last['RSI'] > 50 and last['close'] > last['EMA20']:
+                signals.append("RSI bullish and above EMA20")
+                buy_signals += 1
+            elif last['RSI'] < 50 and last['close'] < last['EMA20']:
+                signals.append("RSI bearish and below EMA20")
+                sell_signals += 1
+        
+        # MACD trend confirmation
+        if last['MACD'] > last['MACD_signal'] and last['MACD_histogram'] > prev['MACD_histogram']:
+            signals.append("MACD bullish with increasing momentum")
+            buy_signals += 1
+            
+        if last['MACD'] < last['MACD_signal'] and last['MACD_histogram'] < prev['MACD_histogram']:
+            signals.append("MACD bearish with increasing momentum")
+            sell_signals += 1
+        
+        # Support/Resistance levels
+        sr_levels = calculate_support_resistance(df)
+        nearest_resistance = min(sr_levels['resistance'], key=lambda x: abs(x - current_price))
+        nearest_support = min(sr_levels['support'], key=lambda x: abs(x - current_price))
+        
+        # Check if price is near support (potential buy)
+        if abs(current_price - nearest_support) / current_price < 0.01:  # Within 1%
+            if current_price > nearest_support:  # Above support
+                signals.append("Price near support level - potential bounce")
+                buy_signals += 1
+        
+        # Check if price is near resistance (potential sell)
+        if abs(current_price - nearest_resistance) / current_price < 0.01:  # Within 1%
+            if current_price < nearest_resistance:  # Below resistance
+                signals.append("Price near resistance level - potential rejection")
+                sell_signals += 1
+        
+        # Determine action
+        action = None
+        if buy_signals >= 3 and buy_signals > sell_signals:
+            action = "BUY"
+            logger(f"🟢 INTRADAY BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals >= 3 and sell_signals > buy_signals:
+            action = "SELL"
+            logger(f"🔴 INTRADAY SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
+        else:
+            logger(f"⚪ INTRADAY No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need 3+ dominant)")
+        
+        return action, signals
+        
+    except Exception as e:
+        logger(f"❌ Intraday strategy error: {str(e)}")
+        return None, [f"Intraday error: {str(e)}"]
+
+
+def arbitrage_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, point: float) -> Tuple[Optional[str], List[str]]:
+    """Arbitrage strategy - Price discrepancy exploitation"""
+    try:
+        signals = []
+        buy_signals = 0
+        sell_signals = 0
+        
+        # Use recent data
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        # Current prices
+        current_bid = round(current_tick.bid, digits)
+        current_ask = round(current_tick.ask, digits)
+        current_price = round((current_bid + current_ask) / 2, digits)
+        
+        # Arbitrage looks for quick mean reversion opportunities
+        # Bollinger Band extremes
+        if last['close'] > last['BB_upper'] * 1.01:  # 1% above upper band
+            signals.append("Price significantly above Bollinger Upper - mean reversion expected")
+            sell_signals += 2
+            
+        if last['close'] < last['BB_lower'] * 0.99:  # 1% below lower band
+            signals.append("Price significantly below Bollinger Lower - mean reversion expected")
+            buy_signals += 2
+        
+        # RSI extremes for arbitrage
+        if last['RSI'] > 80:
+            signals.append("RSI extremely overbought - arbitrage sell opportunity")
+            sell_signals += 1
+            
+        if last['RSI'] < 20:
+            signals.append("RSI extremely oversold - arbitrage buy opportunity")
+            buy_signals += 1
+        
+        # Price vs EMA deviation
+        ema20_deviation = abs(current_price - last['EMA20']) / last['EMA20']
+        if ema20_deviation > 0.02:  # 2% deviation
+            if current_price > last['EMA20']:
+                signals.append("Price 2%+ above EMA20 - potential reversion")
+                sell_signals += 1
+            else:
+                signals.append("Price 2%+ below EMA20 - potential reversion")
+                buy_signals += 1
+        
+        # Stochastic extremes
+        if last['%K'] > 90 and last['%D'] > 90:
+            signals.append("Stochastic extremely overbought")
+            sell_signals += 1
+            
+        if last['%K'] < 10 and last['%D'] < 10:
+            signals.append("Stochastic extremely oversold")
+            buy_signals += 1
+        
+        # Volume spike confirmation (if available)
+        if 'volume_ratio' in last and last['volume_ratio'] > 1.5:
+            signals.append("High volume confirms price movement")
+            # Add to existing signals rather than creating new ones
+        
+        # Determine action
+        action = None
+        if buy_signals >= 2 and buy_signals > sell_signals:
+            action = "BUY"
+            logger(f"🟢 ARBITRAGE BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals >= 2 and sell_signals > buy_signals:
+            action = "SELL"
+            logger(f"🔴 ARBITRAGE SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
+        else:
+            logger(f"⚪ ARBITRAGE No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need 2+ dominant)")
+        
+        return action, signals
+        
+    except Exception as e:
+        logger(f"❌ Arbitrage strategy error: {str(e)}")
+        return None, [f"Arbitrage error: {str(e)}"]
+
+
+def hft_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, point: float) -> Tuple[Optional[str], List[str]]:
+    """High Frequency Trading strategy - Ultra-fast micro movements"""
+    try:
+        signals = []
+        buy_signals = 0
+        sell_signals = 0
+        
+        # Use recent data
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
+        prev2 = df.iloc[-3] if len(df) > 3 else prev
+        
+        # Current prices
+        current_bid = round(current_tick.bid, digits)
+        current_ask = round(current_tick.ask, digits)
+        current_price = round((current_bid + current_ask) / 2, digits)
+        
+        # HFT looks for very short-term momentum
+        # Fast EMA momentum
+        if last['EMA8'] > prev['EMA8'] and prev['EMA8'] > prev2['EMA8']:
+            signals.append("EMA8 accelerating upward")
+            buy_signals += 1
+            
+        if last['EMA8'] < prev['EMA8'] and prev['EMA8'] < prev2['EMA8']:
+            signals.append("EMA8 accelerating downward")
+            sell_signals += 1
+        
+        # Price momentum
+        price_momentum = (last['close'] - prev['close']) / prev['close']
+        if price_momentum > 0.001:  # 0.1% momentum
+            signals.append("Strong upward price momentum")
+            buy_signals += 1
+        elif price_momentum < -0.001:
+            signals.append("Strong downward price momentum")
+            sell_signals += 1
+        
+        # Fast RSI changes
+        rsi_change = last['RSI_fast'] - prev['RSI_fast']
+        if rsi_change > 5 and last['RSI_fast'] > 50:
+            signals.append("Fast RSI rapid increase")
+            buy_signals += 1
+        elif rsi_change < -5 and last['RSI_fast'] < 50:
+            signals.append("Fast RSI rapid decrease")
+            sell_signals += 1
+        
+        # MACD histogram momentum
+        macd_momentum = last['MACD_histogram'] - prev['MACD_histogram']
+        if macd_momentum > 0 and last['MACD_histogram'] > 0:
+            signals.append("MACD histogram increasing (bullish)")
+            buy_signals += 1
+        elif macd_momentum < 0 and last['MACD_histogram'] < 0:
+            signals.append("MACD histogram decreasing (bearish)")
+            sell_signals += 1
+        
+        # ATR-based volatility filter
+        if last['ATR_fast'] > last['ATR'] * 0.8:  # High volatility
+            signals.append("High volatility detected")
+            # In HFT, we might want to trade WITH volatility
+        
+        # Micro support/resistance
+        recent_high = df['high'].iloc[-5:].max()
+        recent_low = df['low'].iloc[-5:].min()
+        
+        if current_price >= recent_high * 0.999:  # Very close to recent high
+            signals.append("Price at recent high - potential breakout")
+            buy_signals += 1
+            
+        if current_price <= recent_low * 1.001:  # Very close to recent low
+            signals.append("Price at recent low - potential breakdown")
+            sell_signals += 1
+        
+        # Determine action
+        action = None
+        if buy_signals >= 3 and buy_signals > sell_signals:
+            action = "BUY"
+            logger(f"🟢 HFT BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals >= 3 and sell_signals > buy_signals:
+            action = "SELL"
+            logger(f"🔴 HFT SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
+        else:
+            logger(f"⚪ HFT No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need 3+ dominant)")
+        
+        return action, signals
+        
+    except Exception as e:
+        logger(f"❌ HFT strategy error: {str(e)}")
+        return None, [f"HFT error: {str(e)}"]
