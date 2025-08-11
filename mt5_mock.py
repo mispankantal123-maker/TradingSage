@@ -75,12 +75,13 @@ def initialize(path: str = None) -> bool:
     _connected = True
     logger("🎯 Mock MT5 initialized successfully")
     
-    # Initialize some default symbols
+    # Initialize some default symbols including XAUUSDm for CFD testing
     default_symbols = {
         "EURUSD": {"bid": 1.0850, "ask": 1.0852, "digits": 5, "point": 0.00001},
         "GBPUSD": {"bid": 1.2650, "ask": 1.2652, "digits": 5, "point": 0.00001},
         "USDJPY": {"bid": 149.50, "ask": 149.52, "digits": 3, "point": 0.01},
         "XAUUSD": {"bid": 2020.50, "ask": 2021.00, "digits": 2, "point": 0.01},
+        "XAUUSDm": {"bid": 3373.20, "ask": 3373.40, "digits": 2, "point": 0.01},  # Gold CFD  
         "AUDUSD": {"bid": 0.6750, "ask": 0.6752, "digits": 5, "point": 0.00001},
         "USDCAD": {"bid": 1.3450, "ask": 1.3452, "digits": 5, "point": 0.00001}
     }

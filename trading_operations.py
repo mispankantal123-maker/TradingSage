@@ -353,6 +353,9 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
                 logger("💡 Insufficient funds - reduce lot size")
             elif retcode == 10020:  # TRADE_RETCODE_PRICE_CHANGED
                 logger("💡 Price changed during execution - retry")
+            elif retcode == 10016:  # TRADE_RETCODE_INVALID_STOPS
+                logger("💡 Invalid stops - TP/SL too close to market price or wrong direction")
+                logger("💡 Solution: Check TP/SL calculation and minimum distance requirements")
             else:
                 logger(f"💡 Unknown error code: {retcode}")
                 
@@ -571,35 +574,72 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
         sl_price = calculate_tp_sl_all_modes(f"-{sl_value}", sl_unit, symbol, action, current_price, lot_size)
         
-        # CRITICAL FIX: If TP/SL calculation failed (returns 0.0), use direct pip calculation as fallback
-        if tp_price == 0.0 and float(tp_value) > 0:
-            logger(f"⚠️ TP calculation failed, using direct pip calculation")
+        # CRITICAL FIX: Always ensure valid TP/SL calculation for Windows MT5
+        if tp_price <= 0.0 or tp_price == current_price:
+            logger(f"⚠️ TP calculation invalid ({tp_price}), using direct pip calculation")
             symbol_info = mt5.symbol_info(symbol)
-            point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+            # Use larger point values for XAUUSDm (Gold CFD)
+            if 'XAU' in symbol and 'm' in symbol:
+                point = 0.01  # Gold CFD point
+            elif 'XAU' in symbol:
+                point = 0.01  # Gold spot point  
+            else:
+                point = getattr(symbol_info, 'point', 0.00001) if symbol_info else 0.00001
             
+            # Calculate TP with minimum 20 pips for safety
+            pip_distance = max(float(tp_value), 20.0)
             if action.upper() == "BUY":
-                tp_price = round(current_price + (float(tp_value) * point), 3)
+                tp_price = round(current_price + (pip_distance * point), symbol_info.digits if symbol_info else 3)
             else:  # SELL  
-                tp_price = round(current_price - (float(tp_value) * point), 3)
+                tp_price = round(current_price - (pip_distance * point), symbol_info.digits if symbol_info else 3)
                 
-        if sl_price == 0.0 and float(sl_value) > 0:
-            logger(f"⚠️ SL calculation failed, using direct pip calculation")
+        if sl_price <= 0.0 or sl_price == current_price:
+            logger(f"⚠️ SL calculation invalid ({sl_price}), using direct pip calculation")
             symbol_info = mt5.symbol_info(symbol)
-            point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+            # Use larger point values for XAUUSDm (Gold CFD)
+            if 'XAU' in symbol and 'm' in symbol:
+                point = 0.01  # Gold CFD point
+            elif 'XAU' in symbol:
+                point = 0.01  # Gold spot point
+            else:
+                point = getattr(symbol_info, 'point', 0.00001) if symbol_info else 0.00001
             
+            # Calculate SL with minimum 10 pips for safety
+            pip_distance = max(float(sl_value), 10.0)
             if action.upper() == "BUY":
-                sl_price = round(current_price - (float(sl_value) * point), 3)
+                sl_price = round(current_price - (pip_distance * point), symbol_info.digits if symbol_info else 3)
             else:  # SELL
-                sl_price = round(current_price + (float(sl_value) * point), 3)
+                sl_price = round(current_price + (pip_distance * point), symbol_info.digits if symbol_info else 3)
         
         logger(f"🔧 Enhanced TP/SL calculation:")
         logger(f"   TP: {tp_value} {tp_unit} → {tp_price}")
         logger(f"   SL: {sl_value} {sl_unit} → {sl_price}")
         logger(f"   Entry: {current_price}")
         
-        # Ensure TP/SL values are valid
+        # CRITICAL: Ensure TP/SL values are valid for Windows MT5
         if tp_price > 0 and sl_price > 0:
             logger(f"✅ Valid TP/SL levels will be sent with order")
+        else:
+            logger(f"❌ CRITICAL: Invalid TP/SL detected - TP:{tp_price}, SL:{sl_price}")
+            logger(f"🔧 Forcing fallback TP/SL calculation...")
+            
+            # Emergency fallback calculation
+            symbol_info = mt5.symbol_info(symbol)
+            point = 0.01 if 'XAU' in symbol else 0.00001
+            digits = getattr(symbol_info, 'digits', 3) if symbol_info else 3
+            
+            if action.upper() == "BUY":
+                if tp_price <= 0:
+                    tp_price = round(current_price + (20 * point), digits)
+                if sl_price <= 0:
+                    sl_price = round(current_price - (10 * point), digits)
+            else:  # SELL
+                if tp_price <= 0:
+                    tp_price = round(current_price - (20 * point), digits)
+                if sl_price <= 0:
+                    sl_price = round(current_price + (10 * point), digits)
+                    
+            logger(f"🔧 Emergency TP/SL: TP={tp_price}, SL={sl_price}")
         
         logger(f"🎯 Executing {action} signal for {symbol}")
         logger(f"📋 Using strategy: {current_strategy}")

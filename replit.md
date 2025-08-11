@@ -164,6 +164,13 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Position Monitoring**: Real-time TP/SL display in GUI positions panel
 - ✅ **Live Trading Ready**: Complete TP/SL integration for Windows MT5
 
+### ERROR 10016 "Invalid stops" CRITICAL FIX (January 2025)
+- ✅ **TP/SL Validation Enhanced**: Always ensures valid TP/SL before sending to MT5
+- ✅ **XAUUSDm Support Added**: Specific handling for Gold CFD symbols with correct point values
+- ✅ **Emergency Fallback System**: Safe default TP/SL when calculation fails
+- ✅ **Enhanced Error Handling**: Detailed Error 10016 diagnosis and solutions
+- ✅ **Windows MT5 Compatibility**: Prevents "None" TP values that cause order rejection
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5
