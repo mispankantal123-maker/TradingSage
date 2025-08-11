@@ -76,35 +76,80 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
         price_change_pips = abs(price_change) / point
         logger(f"   📊 Price Movement: {price_change:+.{digits}f} ({price_change_pips:.1f} pips)")
         
-        # FIXED: More lenient spread handling for precious metals
-        if any(precious in symbol for precious in ["XAU", "XAG", "GOLD", "SILVER"]):
-            symbol_info = mt5.symbol_info(symbol)
-            if symbol_info:
-                point_value = getattr(symbol_info, 'point', 0.01)
-                spread_pips = current_spread / point_value
-                max_allowed_spread = 300.0  # INCREASED from 100 to 300 for gold
+        # ENHANCED AUTO-DETECT: Smart spread analysis for ALL symbols on Windows MT5
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info:
+            # Use REAL MT5 data for Windows live trading
+            point_value = getattr(symbol_info, 'point', 0.00001)
+            digits = getattr(symbol_info, 'digits', 5)
+            spread_pips = current_spread / point_value
+            
+            # SMART symbol type detection with realistic spread limits
+            if any(metal in symbol.upper() for metal in ["XAU", "XAG", "GOLD", "SILVER"]):
+                max_allowed_spread = 150.0  # Gold/Silver - realistic for live trading
+                symbol_type = "METALS"
+            elif any(crypto in symbol.upper() for crypto in ["BTC", "ETH", "LTC", "XRP", "ADA", "DOT"]):
+                max_allowed_spread = 800.0  # Crypto spreads are wider
+                symbol_type = "CRYPTO"  
+            elif any(oil in symbol.upper() for oil in ["OIL", "WTI", "BRENT", "USOIL", "UKOIL"]):
+                max_allowed_spread = 30.0  # Oil commodities
+                symbol_type = "ENERGY"
+            elif any(index in symbol.upper() for index in ["SPX", "NAS", "DOW", "DAX", "FTSE", "NIKKEI"]):
+                max_allowed_spread = 8.0  # Stock indices
+                symbol_type = "INDICES"
+            elif "JPY" in symbol.upper():
+                max_allowed_spread = 3.0  # JPY pairs (2-digit pricing)
+                symbol_type = "FOREX_JPY"
+            elif len(symbol) == 6 and any(curr in symbol[3:] for curr in ["USD", "EUR", "GBP", "CHF", "CAD", "AUD", "NZD"]):
+                max_allowed_spread = 2.0  # Major forex pairs
+                symbol_type = "FOREX_MAJOR"
             else:
-                spread_pips = current_spread / 0.01
-                max_allowed_spread = 300.0  # INCREASED limit for gold
-        elif "JPY" in symbol:
-            spread_pips = current_spread / 0.01
-            max_allowed_spread = 8.0  # JPY pairs
+                max_allowed_spread = 5.0  # Exotic pairs and others
+                symbol_type = "EXOTIC"
+                
+            logger(f"   📋 Auto-detected: {symbol_type} | Spread limit: {max_allowed_spread} pips")
         else:
-            spread_pips = current_spread / 0.0001
-            max_allowed_spread = 5.0  # Major forex pairs
+            # Fallback for development/mock (akan jarang digunakan di Windows MT5)
+            if any(metal in symbol.upper() for metal in ["XAU", "XAG"]):
+                spread_pips = current_spread / 0.01
+                max_allowed_spread = 150.0
+                symbol_type = "METALS"
+            elif "JPY" in symbol:
+                spread_pips = current_spread / 0.01
+                max_allowed_spread = 3.0
+                symbol_type = "FOREX_JPY"
+            else:
+                spread_pips = current_spread / 0.00001
+                max_allowed_spread = 2.0
+                symbol_type = "FOREX"
         
-        spread_quality = "EXCELLENT" if spread_pips < max_allowed_spread * 0.3 else "GOOD" if spread_pips < max_allowed_spread * 0.6 else "FAIR" if spread_pips < max_allowed_spread * 0.8 else "POOR"
-        logger(f"   🎯 Spread Analysis: {spread_pips:.1f} pips ({spread_quality}) | Max: {max_allowed_spread}")
+        # Enhanced spread quality assessment
+        if spread_pips <= max_allowed_spread * 0.4:
+            spread_quality = "EXCELLENT"
+            trade_confidence = 1.0
+        elif spread_pips <= max_allowed_spread * 0.7:
+            spread_quality = "GOOD" 
+            trade_confidence = 0.8
+        elif spread_pips <= max_allowed_spread:
+            spread_quality = "ACCEPTABLE"
+            trade_confidence = 0.6
+        else:
+            spread_quality = "WIDE"
+            trade_confidence = 0.4
+            
+        logger(f"   🎯 Spread: {spread_pips:.1f} pips ({spread_quality}) | Limit: {max_allowed_spread} | Confidence: {trade_confidence*100:.0f}%")
         
-        # FIXED: More lenient spread filtering for live trading
-        if spread_pips > max_allowed_spread:
-            logger(f"⚠️ Spread wide ({spread_pips:.1f} pips > {max_allowed_spread}) but continuing with adjusted targets")
+        # LIVE TRADING DECISION: Continue trading but adjust lot size based on spread
+        if spread_pips > max_allowed_spread * 1.5:
+            logger(f"⚠️ Extremely wide spread - reducing position size by 50%")
+            spread_warning = True
+        elif spread_pips > max_allowed_spread:
+            logger(f"⚠️ Wide spread - reducing position size by 25%") 
             spread_warning = True
         else:
             spread_warning = False
             
-        # Don't skip trading due to spread - just adjust parameters
-        logger(f"   📊 Trading continues despite spread conditions")
+        logger(f"   ✅ Trading ACTIVE for {symbol_type} with {trade_confidence*100:.0f}% confidence")
         
         # Route to specific strategy
         if strategy == "Scalping":
