@@ -134,12 +134,12 @@ class TradingBotGUI:
         self.tp_unit_combo.grid(row=0, column=1)
         self.tp_unit_combo.bind("<<ComboboxSelected>>", self.on_tp_unit_change)
         
-        # Row 2: SL
-        ttk.Label(params_frame, text="SL:").grid(row=2, column=2, sticky="w", padx=(0,3))
+        # Row 2: SL and Scan Interval
+        ttk.Label(params_frame, text="SL:").grid(row=2, column=0, sticky="w", padx=(0,3))
         
         # SL Frame for value and unit  
         sl_frame = ttk.Frame(params_frame)
-        sl_frame.grid(row=2, column=3, padx=(0, 5), sticky="w")
+        sl_frame.grid(row=2, column=1, padx=(0, 10), sticky="w")
         
         self.sl_entry = ttk.Entry(sl_frame, width=6)
         self.sl_entry.insert(0, "10")
@@ -150,6 +150,12 @@ class TradingBotGUI:
         self.sl_unit_combo.set("pips")
         self.sl_unit_combo.grid(row=0, column=1)
         self.sl_unit_combo.bind("<<ComboboxSelected>>", self.on_sl_unit_change)
+        
+        # Scan Interval
+        ttk.Label(params_frame, text="Scan Interval (sec):").grid(row=2, column=2, sticky="w", padx=(0,3))
+        self.interval_entry = ttk.Entry(params_frame, width=6)
+        self.interval_entry.insert(0, "10")  # Default 10 seconds instead of 30
+        self.interval_entry.grid(row=2, column=3, padx=(0, 5), sticky="w")
         
         # Left panel - Account info and positions
         left_frame = ttk.Frame(main_frame)

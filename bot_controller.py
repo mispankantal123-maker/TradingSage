@@ -168,9 +168,20 @@ def bot_thread() -> None:
                 if current_time.minute == 0:  # Top of the hour
                     send_hourly_report()
                 
+                # Get scan interval from GUI
+                scan_interval = 30  # Default fallback
+                try:
+                    import __main__
+                    if hasattr(__main__, 'gui') and __main__.gui and hasattr(__main__.gui, 'interval_entry'):
+                        interval_text = __main__.gui.interval_entry.get().strip()
+                        if interval_text and interval_text.isdigit():
+                            scan_interval = max(5, min(int(interval_text), 300))  # 5-300 seconds range
+                except:
+                    pass
+                
                 # Wait before next cycle
-                logger(f"⏳ Waiting 30 seconds before next scan...")
-                time.sleep(30)
+                logger(f"⏳ Waiting {scan_interval} seconds before next scan...")
+                time.sleep(scan_interval)
                 
             except KeyboardInterrupt:
                 logger("⚠️ Bot interrupted by user")
