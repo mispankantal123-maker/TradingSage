@@ -189,65 +189,131 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         
         # ENHANCED Scalping conditions - More sensitive signals
         
-        # ENHANCED EMA trend signals (more aggressive for BUY)
+        # BALANCED EMA trend signals with enhanced BUY opportunities
         if last['EMA8'] > last['EMA20']:
-            if last['EMA8'] > prev['EMA8']:  # EMA8 trending up
-                signals.append("EMA8 above EMA20 and rising (Bullish trend)")
-                buy_signals += 2  # More weight for uptrend
+            signals.append("EMA8 above EMA20 (Bullish trend)")
+            buy_signals += 1
+            # ADDITIONAL: If EMA8 is also rising, give extra BUY weight
+            if last['EMA8'] > prev['EMA8']:
+                signals.append("EMA8 rising in uptrend (Strong bullish)")
+                buy_signals += 1  # Total +2 for strong uptrend
         
         if last['EMA8'] < last['EMA20']:
-            if last['EMA8'] < prev['EMA8']:  # EMA8 trending down
-                signals.append("EMA8 below EMA20 and falling (Bearish trend)")
-                sell_signals += 1
+            signals.append("EMA8 below EMA20 (Bearish trend)")
+            sell_signals += 1
+            # ADDITIONAL: If EMA8 is also falling, give extra SELL weight  
+            if last['EMA8'] < prev['EMA8']:
+                signals.append("EMA8 falling in downtrend (Strong bearish)")
+                sell_signals += 1  # Total +2 for strong downtrend
                 
-        # ADDED: Additional BUY bias for trend continuation
-        if last['close'] > last['EMA8'] and last['EMA8'] > last['EMA20']:
-            signals.append("Price above EMA8, EMA8 above EMA20 (Strong uptrend)")
-            buy_signals += 1
-        
-        # Price momentum signals
-        if last['close'] > prev['close']:
-            if (last['close'] - prev['close']) > (prev['close'] - df.iloc[-3]['close']):
-                signals.append("Positive price momentum accelerating")
-                buy_signals += 1
-        
-        if last['close'] < prev['close']:
-            if (prev['close'] - last['close']) > (df.iloc[-3]['close'] - prev['close']):
-                signals.append("Negative price momentum accelerating")
-                sell_signals += 1
-        
-        # FIXED RSI conditions for trend following (not contrarian)
-        if 40 < last['RSI'] < 70 and last['RSI'] > prev['RSI']:  # RSI rising in trending zone
-            signals.append("RSI rising in bullish zone")
+        # CRITICAL: Additional BUY opportunities for price momentum
+        if last['close'] > last['EMA8']:
+            signals.append("Price above EMA8 (Bullish price action)")
             buy_signals += 1
             
-        if 30 < last['RSI'] < 60 and last['RSI'] < prev['RSI']:  # RSI falling in trending zone  
-            signals.append("RSI falling in bearish zone")
+        # CRITICAL: Additional SELL opportunities for price momentum  
+        if last['close'] < last['EMA8']:
+            signals.append("Price below EMA8 (Bearish price action)")
             sell_signals += 1
         
-        # MACD signals (current state, not just crossovers)
-        if last['MACD'] > last['MACD_signal']:
-            if last['MACD_histogram'] > 0:
-                signals.append("MACD bullish with positive histogram")
-                buy_signals += 1
-            
-        if last['MACD'] < last['MACD_signal']:
-            if last['MACD_histogram'] < 0:
-                signals.append("MACD bearish with negative histogram")
-                sell_signals += 1
+        # ENHANCED: Price momentum signals (equal weight for BUY/SELL)
+        price_momentum_up = last['close'] > prev['close']
+        price_momentum_accelerating_up = (last['close'] - prev['close']) > (prev['close'] - df.iloc[-3]['close']) if len(df) > 3 else price_momentum_up
         
-        # FIXED Bollinger Bands - trend continuation (not contrarian)
-        bb_width = last['BB_upper'] - last['BB_lower']
-        bb_position = (last['close'] - last['BB_lower']) / bb_width
+        if price_momentum_up:
+            signals.append("Positive price momentum")
+            buy_signals += 1
+            if price_momentum_accelerating_up:
+                signals.append("Price momentum accelerating upward")
+                buy_signals += 1  # Extra point for acceleration
         
-        # BUY when price breaking above middle towards upper (momentum up)
-        if bb_position > 0.5 and last['close'] > prev['close']:  # Above middle and rising
-            signals.append("Price breaking above BB middle with momentum (Bullish)")
+        price_momentum_down = last['close'] < prev['close']  
+        price_momentum_accelerating_down = (prev['close'] - last['close']) > (df.iloc[-3]['close'] - prev['close']) if len(df) > 3 else price_momentum_down
+        
+        if price_momentum_down:
+            signals.append("Negative price momentum")
+            sell_signals += 1
+            if price_momentum_accelerating_down:
+                signals.append("Price momentum accelerating downward")
+                sell_signals += 1  # Extra point for acceleration
+        
+        # BALANCED RSI conditions (equal opportunity for BUY/SELL)
+        rsi_bullish_zone = 45 <= last['RSI'] <= 75
+        rsi_bearish_zone = 25 <= last['RSI'] <= 55
+        rsi_rising = last['RSI'] > prev['RSI']
+        rsi_falling = last['RSI'] < prev['RSI']
+        
+        # RSI BUY conditions
+        if rsi_bullish_zone and rsi_rising:
+            signals.append("RSI in bullish zone and rising")
+            buy_signals += 1
+        elif last['RSI'] > 50 and rsi_rising:
+            signals.append("RSI above 50 and rising")  
             buy_signals += 1
             
-        # SELL when price breaking below middle towards lower (momentum down)  
-        if bb_position < 0.5 and last['close'] < prev['close']:  # Below middle and falling
-            signals.append("Price breaking below BB middle with momentum (Bearish)")
+        # RSI SELL conditions  
+        if rsi_bearish_zone and rsi_falling:
+            signals.append("RSI in bearish zone and falling")
+            sell_signals += 1
+        elif last['RSI'] < 50 and rsi_falling:
+            signals.append("RSI below 50 and falling")
+            sell_signals += 1
+        
+        # ENHANCED MACD signals (equal weight, more conditions)
+        macd_bullish = last['MACD'] > last['MACD_signal']
+        macd_bearish = last['MACD'] < last['MACD_signal']
+        histogram_positive = last['MACD_histogram'] > 0
+        histogram_negative = last['MACD_histogram'] < 0
+        macd_rising = last['MACD'] > prev['MACD']
+        macd_falling = last['MACD'] < prev['MACD']
+        
+        # MACD BUY conditions
+        if macd_bullish:
+            signals.append("MACD above signal line")
+            buy_signals += 1
+            if histogram_positive:
+                signals.append("MACD histogram positive (momentum)")
+                buy_signals += 1
+        elif macd_rising and not macd_bearish:
+            signals.append("MACD rising toward signal line")
+            buy_signals += 1
+            
+        # MACD SELL conditions
+        if macd_bearish:
+            signals.append("MACD below signal line")
+            sell_signals += 1
+            if histogram_negative:
+                signals.append("MACD histogram negative (momentum)")
+                sell_signals += 1
+        elif macd_falling and not macd_bullish:
+            signals.append("MACD falling toward signal line")
+            sell_signals += 1
+        
+        # ENHANCED Bollinger Bands - multiple signal types
+        bb_width = last['BB_upper'] - last['BB_lower']
+        bb_position = (last['close'] - last['BB_lower']) / bb_width if bb_width > 0 else 0.5
+        bb_middle = (last['BB_upper'] + last['BB_lower']) / 2
+        
+        # BB BUY conditions
+        if last['close'] > bb_middle:
+            signals.append("Price above BB middle band")
+            buy_signals += 1
+            if last['close'] > prev['close']:
+                signals.append("Price above BB middle with upward momentum")
+                buy_signals += 1
+        elif bb_position > 0.3 and last['close'] > prev['close']:
+            signals.append("Price in lower BB range but rising")
+            buy_signals += 1
+            
+        # BB SELL conditions  
+        if last['close'] < bb_middle:
+            signals.append("Price below BB middle band")
+            sell_signals += 1
+            if last['close'] < prev['close']:
+                signals.append("Price below BB middle with downward momentum")
+                sell_signals += 1
+        elif bb_position < 0.7 and last['close'] < prev['close']:
+            signals.append("Price in upper BB range but falling")
             sell_signals += 1
         
         # FIXED: Even more aggressive signal threshold for live market conditions
