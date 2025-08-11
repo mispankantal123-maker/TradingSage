@@ -1,240 +1,62 @@
-# MT5 Advanced Auto Trading Bot v4.0 - Project Documentation
+# MT5 Advanced Auto Trading Bot
 
-## Overview
+### Overview
+This project is a professional-grade algorithmic trading platform for MetaTrader 5, designed for advanced financial strategy development with comprehensive risk management and multi-strategy support. It offers a modular, maintainable, and production-ready solution for automated trading, refactored for clean architecture while maintaining full functionality. The system supports 24/7 trading operations and integrates real-time performance tracking and notifications.
 
-This project is a professional-grade algorithmic trading platform designed for advanced financial strategy development with comprehensive risk management and multi-strategy support. The system has been completely refactored from a monolithic 12,465-line file into a clean, modular architecture while maintaining 100% identical functionality.
-
-## User Preferences
-
+### User Preferences
 **Communication Style**: Simple, everyday language
 **Target Platform**: Windows OS with MetaTrader 5 for live trading
 **Development Environment**: Cross-platform support via mock MT5
 **Code Organization**: Modular, maintainable, production-ready
 
-## System Architecture
+### System Architecture
+The system employs a modular architecture, refactoring a monolithic application into specialized components for enhanced maintainability and scalability.
 
-### Core Components
-- **config.py**: Trading parameters, strategies, and system constants
-- **logger_utils.py**: Centralized logging with GUI integration and file management
-- **validation_utils.py**: Input validation and trading condition checking
+**Core Components:**
+-   **Configuration Management**: Centralized management of trading parameters, strategies, and system constants.
+-   **Logging**: Centralized logging with GUI integration and file management.
+-   **Validation**: Input validation and trading condition checking.
 
-### MT5 Integration Layer
-- **mt5_connection.py**: MetaTrader 5 connectivity and initialization
-- **mt5_mock.py**: Cross-platform mock for development and testing
-- **data_manager.py**: Market data fetching, caching, and validation
+**MT5 Integration Layer:**
+-   **MT5 Connectivity**: Handles MetaTrader 5 connection, initialization, and order execution.
+-   **Mock MT5**: Provides a cross-platform mock for development and testing environments.
+-   **Data Management**: Manages market data fetching, caching, and validation.
 
-### Analysis Engine
-- **indicators.py**: Complete technical analysis (EMAs, RSI, MACD, Bollinger Bands, ATR, Stochastic)
-- **strategies.py**: Four trading strategies (Scalping, Intraday, Arbitrage, HFT)
-- **ai_analysis.py**: Advanced AI market analysis with pattern recognition
+**Analysis Engine:**
+-   **Technical Analysis**: Implements a comprehensive suite of technical indicators (EMAs, RSI, MACD, Bollinger Bands, ATR, Stochastic, WMA).
+-   **Trading Strategies**: Incorporates four distinct trading strategies: Scalping, Intraday, Arbitrage, and HFT, with configurable parameters.
+-   **AI Analysis**: Advanced AI for market analysis and pattern recognition.
 
-### Trading Operations
-- **trading_operations.py**: Order execution, position management, TP/SL calculations
-- **session_management.py**: Trading session detection and time-based filtering
-- **risk_management.py**: Comprehensive risk controls and position sizing
+**Trading Operations:**
+-   **Order & Position Management**: Handles order execution, position tracking, and dynamic TP/SL calculations.
+-   **Session Management**: Detects trading sessions and applies time-based filtering.
+-   **Risk Management**: Enforces comprehensive risk controls, including daily trade limits, position sizing, margin alerts, and equity protection.
 
-### User Interface
-- **gui_module.py**: Complete tkinter GUI identical to original (1400x900, dark theme)
-- **performance_tracking.py**: Real-time reporting and trade analytics
+**User Interface:**
+-   **GUI Module**: A complete tkinter-based GUI (1400x900, dark theme) provides real-time control, parameter adjustment, and display of account info and positions.
+-   **Performance Tracking**: Offers real-time reporting and trade analytics through a dedicated performance popup window.
 
-### Bot Controller
-- **bot_controller.py**: Main trading logic and automation controller
-- **main.py**: Application entry point with GUI and headless modes
-- **run_tests.py**: Comprehensive test suite for all modules
+**Bot Control:**
+-   **Main Logic**: Orchestrates the overall trading logic and automation.
+-   **Application Entry**: Supports both GUI and headless modes.
+-   **Test Suite**: Comprehensive test suite for all modules.
 
-## Key Features Maintained
+**Key Features:**
+-   **Trading Strategies**: Scalping, Intraday, Arbitrage, and HFT, each with specific entry/exit conditions and TP/SL settings.
+-   **Technical Analysis Suite**: Diverse set of moving averages, oscillators, and volatility indicators for robust signal generation.
+-   **GUI Interface**: Intuitive, dark-themed interface with controls for MT5 connection, bot activation, emergency stop, and detailed parameter configuration. Supports real-time account data, position display, and scrolling logs.
+-   **Risk Management**: Configurable daily trade limits, maximum open positions, risk per trade, margin level alerts, and session-based adjustments. Includes smart spread detection and dynamic spread limits for various asset classes.
+-   **Comprehensive TP/SL System**: Supports pips, price, percentage (balance/equity), and money (currency) based TP/SL calculations, fully integrated with the GUI and MT5. Includes robust validation for minimum stop distances and symbol-specific requirements.
+-   **24/7 Operation**: Enabled for continuous trading across all sessions, with softened news time warnings and enhanced error recovery.
+-   **Telegram Notifications**: Real-time alerts for trades, position changes, account monitoring, strategy changes, session updates, bot status, risk alerts, and daily summaries.
+-   **Universal Symbol Support**: Comprehensive handling for over 50 asset types including Forex, Crypto, Metals, Indices, Commodities, and Stocks, ensuring compatibility and accurate TP/SL calculations across all symbols.
 
-### Trading Strategies (4 Complete)
-1. **Scalping**: Fast EMA crossovers, RSI extremes, MACD signals (TP: 20 pips, SL: 10 pips)
-2. **Intraday**: Trend following with EMA alignment and S/R levels (TP: 50 pips, SL: 25 pips)
-3. **Arbitrage**: Mean reversion on Bollinger extremes and RSI/Stoch oversold/bought (TP: 10 pips, SL: 5 pips)
-4. **HFT**: High-frequency micro-movement detection with fast EMAs (TP: 5 pips, SL: 3 pips)
-
-### Technical Analysis Suite
-- **Moving Averages**: EMA (8,12,20,26,50,100,200), WMA (8,14,21)
-- **Oscillators**: RSI (7,14,21), Stochastic (%K, %D), MACD with histogram
-- **Volatility**: ATR (7,14), Bollinger Bands (20,2), volatility ratios
-- **Combined Signals**: Trend detection, pattern recognition, support/resistance
-
-### GUI Interface (100% Identical)
-- **Window**: 1400x900, dark theme (#0f0f0f), professional styling
-- **Controls**: Connect MT5, Start Bot, Emergency Stop, Close Positions
-- **Parameters**: Strategy selection, symbol picker, lot size, TP/SL with units
-- **Display**: Real-time account info, positions tree, scrolling log with timestamps
-- **Reports**: Performance popup window with comprehensive analytics
-
-### Risk Management
-- **Daily Limits**: 50 trades/day, profit targets, loss limits
-- **Position Control**: Max 10 open positions, 2% risk per trade
-- **Monitoring**: Margin level alerts, equity protection, auto-recovery
-- **Session Filtering**: News avoidance, session-based adjustments
-
-## External Dependencies
-
-### Core Libraries
-- **pandas**: Market data analysis and DataFrame operations
-- **numpy**: Numerical computations for indicators and statistics
-- **requests**: HTTP requests for external data (if needed)
-- **tkinter**: GUI framework (built-in Python)
-
-### MetaTrader 5 Integration
-- **MetaTrader5**: Official MT5 Python library (Windows only)
-- **mt5_mock**: Custom mock implementation for cross-platform development
-
-### Development Tools
-- **Python 3.8+**: Minimum required Python version
-- **Cross-platform**: Windows (production), Linux/Mac (development)
-- **Testing**: Built-in test suite with mock environment
-
-## Deployment Configuration
-
-### Production (Windows)
-1. Install MetaTrader 5 terminal
-2. Install Python 3.8+ and required packages
-3. Configure MT5 account and symbols
-4. Run: `python main.py`
-
-### Development (Any OS)
-1. Install Python and dependencies
-2. Uses built-in mock MT5
-3. Run tests: `python run_tests.py`
-4. Develop and test: `python main.py`
-
-### Headless Mode
-- Server deployment: `python main.py --headless`
-- Background operation without GUI
-- Suitable for VPS/cloud deployment
-
-## Recent Changes (January 2025)
-
-### Complete Refactor & Production Optimization COMPLETED ✅
-- ✅ **Modular Architecture**: Split 12,465-line monolithic file into 15 specialized modules
-- ✅ **Eliminated Duplication**: Removed duplicate GUI classes and repeated functions
-- ✅ **Cross-Platform**: Added mock MT5 for development on non-Windows systems
-- ✅ **Production Ready**: Fully tested and optimized for live Windows MT5 trading
-
-### CRITICAL LIVE TRADING FIXES IMPLEMENTED ⚡
-- ✅ **Signal Execution FIXED**: Reduced threshold from 2→1 for more aggressive entries
-- ✅ **Symbol Support EXPANDED**: 88+ symbols (USOILm, BTCUSDm, XAUUSDm, XAUUSDc, etc.)
-- ✅ **TP/SL Percentage OPTIONS**: Added balance% and equity% calculation modes  
-- ✅ **GUI Layout IMPROVED**: Enhanced parameters layout matching original design
-- ✅ **Order Execution ENHANCED**: Detailed MT5 error handling with retry logic
-- ✅ **Performance OPTIMIZED**: Faster signal generation and execution
-
-### Functionality Verification
-- ✅ **100% Feature Parity**: All original functionality preserved and enhanced
-- ✅ **Enhanced GUI**: Improved layout with percentage TP/SL options
-- ✅ **4 Trading Strategies**: All strategies working with lower signal thresholds
-- ✅ **Comprehensive Symbols**: Support for all major asset classes
-- ✅ **Live Trading Ready**: Order execution system fully functional
-
-### Production Readiness Assessment
-- ✅ **Signal Generation**: Bot now generates BUY/SELL signals consistently
-- ✅ **Order Execution**: Enhanced error handling for live trading conditions
-- ✅ **Risk Management**: Comprehensive position and account protection
-- ✅ **Real Money Ready**: All dummy functions removed, live execution enabled
-
-### LIVE TRADING ENHANCEMENTS (Latest)
-- ✅ **Smart Spread Detection**: Auto-detects symbol type (Forex, Metals, Crypto, etc.)
-- ✅ **Dynamic Spread Limits**: Realistic limits per asset class for Windows MT5
-- ✅ **Position Size Adjustment**: Auto-reduces lot size with wide spreads
-- ✅ **Windows MT5 Optimized**: Uses real symbol_info() data for live trading
-- ✅ **Multi-Symbol Ready**: Works with all 88+ symbols automatically
-- ✅ **OrderSendResult Compatibility**: Fixed for real Windows MT5 order execution
-
-### CRITICAL WINDOWS MT5 ERROR FIXES (January 2025)
-- ✅ **Error 10016 Fixed**: Invalid stops - implemented proper TP/SL distance validation
-- ✅ **Error 10015 Fixed**: Invalid order - enhanced order parameter validation
-- ✅ **Minimum Stop Distance**: Auto-detects and applies symbol-specific stop requirements
-- ✅ **Enhanced Order Validation**: Proper filling modes, price precision, and parameter checking
-- ✅ **Real Bid/Ask Usage**: Uses accurate entry prices for TP/SL calculations
-
-### COMPREHENSIVE TP/SL SYSTEM IMPLEMENTATION (Latest)
-- ✅ **4 Complete TP/SL Modes**: pips, price, percent (balance), money (currency)
-- ✅ **Full GUI Integration**: Dropdown selectors with real-time unit change handlers
-- ✅ **Enhanced Calculation Engine**: Comprehensive mode support with proper direction logic
-- ✅ **MT5 Integration**: Real account info and symbol data for accurate calculations
-- ✅ **Auto Spread Detection**: Live market watch integration for dynamic spread limits
-- ✅ **Production Ready**: All syntax errors resolved, comprehensive testing completed
-
-### TP/SL POSITION TRACKING FIX (January 2025)
-- ✅ **Mock Position TP/SL**: Enhanced mock MT5 to store TP/SL in positions
-- ✅ **GUI Position Display**: Added TP/SL columns to positions tree view
-- ✅ **Order Integration**: TP/SL values properly passed to MT5 order execution
-- ✅ **Position Monitoring**: Real-time TP/SL display in GUI positions panel
-- ✅ **Live Trading Ready**: Complete TP/SL integration for Windows MT5
-
-### ERROR 10016 "Invalid stops" CRITICAL FIX (January 2025)
-- ✅ **TP/SL Validation Enhanced**: Always ensures valid TP/SL before sending to MT5
-- ✅ **XAUUSDm Support Added**: Specific handling for Gold CFD symbols with correct point values
-- ✅ **Emergency Fallback System**: Safe default TP/SL when calculation fails
-- ✅ **Enhanced Error Handling**: Detailed Error 10016 diagnosis and solutions
-- ✅ **Windows MT5 Compatibility**: Prevents "None" TP values that cause order rejection
-
-### COMPREHENSIVE USER REQUIREMENTS IMPLEMENTATION (January 2025)
-- ✅ **MT5 TP/SL Integration Fixed**: TP/SL now properly included in actual MT5 orders
-- ✅ **Configurable Scan Interval**: Added GUI input field for scan timing (5-300 seconds)
-- ✅ **Default Speed Improved**: Changed from 30s to 10s for faster market scanning
-- ✅ **Dynamic Bot Configuration**: Users can adjust scan speed without code changes
-- ✅ **Complete Position Tracking**: Enhanced GUI positions display with TP/SL columns
-
-### GUI UNIT SELECTION FIX (January 2025) 
-- ✅ **GUI Unit Reading Fixed**: Bot now properly reads "percent" from GUI dropdowns
-- ✅ **Unit Mapping System**: Maps GUI display names to internal calculation functions
-- ✅ **Strategy Override Logic**: GUI values always override strategy defaults
-- ✅ **Percentage Calculation Fixed**: Direct price percentage calculation (2% = 1.02x price)
-- ✅ **Enhanced Logging**: Shows GUI unit detection and override process in logs
-
-### CRITICAL STRATEGY BUY/SELL BALANCE FIX (January 2025)
-- ✅ **RSI Logic Fixed**: Changed from contrarian (RSI<35 buy) to trend-following (RSI 40-70 rising)
-- ✅ **Bollinger Bands Fixed**: Changed from contrarian to momentum-based trend continuation
-- ✅ **Signal Competition Fixed**: Balanced BUY vs SELL logic with proper tiebreaker handling
-- ✅ **Enhanced BUY Bias**: Double weight for EMA uptrend + additional strong uptrend condition
-- ✅ **Momentum Integration**: Price momentum properly integrated for signal generation
-
-### ERROR 10016 "Invalid stops" FINAL SOLUTION (January 2025)
-- ✅ **Balance% Calculation Fixed**: Proper currency-to-pips conversion prevents extreme values
-- ✅ **XAUUSDm Support Enhanced**: Gold-specific minimum distances (100+ pips) with proper point values
-- ✅ **Multi-Layer TP/SL Validation**: Distance, direction, and emergency fallback systems
-- ✅ **Windows MT5 Integration**: Uses real symbol_info() data for accurate stop levels
-- ✅ **Symbol-Specific Handling**: Gold=100 pips, JPY=20 pips, Forex=10 pips minimum distances
-- ✅ **Production Ready**: Comprehensive Error 10016 prevention for all symbol types
-
-### BALANCE PERCENTAGE IMPLEMENTATION (January 2025)
-- ✅ **Balance% Unit Added**: New "balance%" option in GUI TP/SL dropdowns
-- ✅ **Proper Balance Calculation**: 2% balance = 2% of account balance ($200 on $10k)
-- ✅ **Equity% Support Added**: Also supports percentage of account equity
-- ✅ **Unit Mapping Enhanced**: Complete mapping for all percentage types
-- ✅ **Reasonable Values**: No more extreme IDR values, proper risk management
-- ✅ **MT5 Integration**: Balance-based TP/SL properly sent to MT5 orders
-
-### 24/7 TRADING OPERATION (January 2025)
-- ✅ **Weekend Trading Enabled**: Weekend sessions now active for crypto/forex trading
-- ✅ **Time Restrictions Removed**: No more "Outside trading hours" blocking
-- ✅ **News Time Softened**: Major news times warn but don't stop trading
-- ✅ **Error Recovery Enhanced**: Defaults to allow trading if session detection fails
-- ✅ **Session-Based Risk**: Different risk modifiers per session but all active
-- ✅ **True 24/7 Operation**: Bot can now trade continuously without time-based pauses
-
-### TELEGRAM NOTIFICATIONS SYSTEM (January 2025)
-- ✅ **Complete Integration**: Full Telegram Bot API integration with user's token/chat ID
-- ✅ **Real-time Trade Alerts**: Buy/sell orders with symbol, volume, price, TP/SL details
-- ✅ **Position Management**: Position closed notifications with profit/loss calculations
-- ✅ **Account Monitoring**: Balance, equity, margin level updates with formatting
-- ✅ **Strategy Notifications**: Strategy changes with parameter details
-- ✅ **Session Updates**: Trading session changes with volatility and recommendations
-- ✅ **Bot Status**: Start/stop/error notifications with comprehensive status messages
-- ✅ **Risk Alerts**: Risk management warnings and automated actions
-- ✅ **Daily Summaries**: End-of-day performance reports with statistics
-
-## Next Steps for Live Trading
-
-1. **Deploy to Windows**: Set up Windows environment with MT5
-2. **Account Setup**: Configure live or demo trading account
-3. **Parameter Tuning**: Adjust lot sizes and risk parameters
-4. **Monitor Performance**: Track bot performance and adjust as needed
-5. **Scale Gradually**: Start small and increase position sizes over time
-
----
-
-*Last Updated: January 2025 - Complete modular refactor successfully implemented with 100% functionality preservation*
+### External Dependencies
+-   **pandas**: For market data analysis and DataFrame operations.
+-   **numpy**: For numerical computations in indicators and statistics.
+-   **requests**: For HTTP requests (if external data sources are used).
+-   **tkinter**: Python's built-in GUI framework.
+-   **MetaTrader5**: The official Python library for MT5 integration.
+-   **mt5_mock**: Custom mock implementation for cross-platform development.
+-   **Python 3.8+**: Minimum required Python version.
+```

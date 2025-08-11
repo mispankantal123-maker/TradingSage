@@ -1,0 +1,69 @@
+[09:24:12] [09:24:12] ❌ Failed to execute BUY order for BTCUSDm
+[09:24:12] [09:24:12] ❌ Trade execution failed for BTCUSDm
+[09:24:13] [09:24:13] 📊 GUI Update #40: Balance=$5056512.79, Equity=$5056512.79, Positions=0
+[09:24:14] [09:24:14] 📊 Scan complete: 1 signals found from 1 symbols
+[09:24:14] [09:24:14] ⏳ Waiting 10 seconds before next scan...
+[09:24:24] [09:24:24] ⚠️ High-impact news time detected: 09:24 UTC
+[09:24:24] [09:24:24] ⚠️ High impact news time - reducing activity but not stopping
+[09:24:24] [09:24:24] 📊 Analyzing 1 symbols with Scalping strategy
+[09:24:25] [09:24:25] 📊 Fetching data for 1 symbols...
+[09:24:25] [09:24:25] 📊 Fetching data for BTCUSDm (500 bars)
+[09:24:25] [09:24:25] ✅ Successfully fetched 500 bars for BTCUSDm
+[09:24:25] [09:24:25]    Latest: O=121159.69000 H=121733.19000 L=121118.35000 C=121596.60000
+[09:24:25] [09:24:25] ✅ Successfully loaded 1/1 symbols
+[09:24:25] [09:24:25] 📊 BTCUSDm Precise Data:
+[09:24:25] [09:24:25]    📈 Candle: O=121159.69 H=121733.19 L=121118.35 C=121596.60
+[09:24:25] [09:24:25]    🎯 Real-time: Bid=121596.60 Ask=121618.20 Spread=21.60
+[09:24:25] [09:24:25]    💡 Current Price: 121607.40 (Mid-price)
+[09:24:25] [09:24:25]    📊 Price Movement: +10.80 (1080.0 pips)
+[09:24:25] [09:24:25]    📋 Auto-detected: CRYPTO | Spread limit: 800.0 pips
+[09:24:25] [09:24:25]    🎯 Spread: 2160.0 pips (WIDE) | Limit: 800.0 | Confidence: 40%
+[09:24:25] [09:24:25] ⚠️ Extremely wide spread - reducing position size by 50%
+[09:24:25] [09:24:25]    ✅ Trading ACTIVE for CRYPTO with 40% confidence
+[09:24:25] [09:24:25] 🟢 SCALPING BUY Signal for BTCUSDm: 10 buy vs 0 sell
+[09:24:25] [09:24:25] 🎯 Signal detected for BTCUSDm: BUY
+[09:24:25] [09:24:25] 📊 Session adjustments for Scalping: {'signal_threshold_modifier': 0, 'risk_modifier': 1.2, 'session_name': 'European', 'volatility': 'HIGH'}
+[09:24:25] [09:24:25] 🎯 Executing BUY signal for BTCUSDm
+[09:24:25] [09:24:25] 📋 Signals: ['EMA8 above EMA20 (Bullish trend)', 'EMA8 rising in uptrend (Strong bullish)', 'Price above EMA8 (Bullish price action)', 'Positive price momentum', 'Price momentum accelerating upward', 'RSI above 50 and rising', 'MACD above signal line', 'MACD histogram positive (momentum)', 'Price above BB middle band', 'Price above BB middle with upward momentum']
+[09:24:25] [09:24:25] 📊 GUI Settings at execution:
+[09:24:25] [09:24:25]    Symbol: BTCUSDm
+[09:24:25] [09:24:25]    Lot Size: 0.01
+[09:24:25] [09:24:25]    TP: 2 balance%
+[09:24:25] [09:24:25]    SL: 4 balance%
+[09:24:25] [09:24:25] 🔍 GUI: Reading TP/SL settings:
+[09:24:25] [09:24:25]    TP: 2 | Unit: balance%
+[09:24:25] [09:24:25]    SL: 4 | Unit: balance%
+[09:24:25] [09:24:25] ✅ Final TP/SL settings:
+[09:24:25] [09:24:25]    TP: 2 balance%
+[09:24:25] [09:24:25]    SL: 4 balance%
+[09:24:25] [09:24:25]    GUI Override: TP_unit=balance% -> balance%, SL_unit=balance% -> balance%
+[09:24:25] [09:24:25] 🔍 Balance% calculation: 2.0% of $5056512.79 = $101130.26
+[09:24:25] [09:24:25] ⚠️ Balance% calculated 1011302558.0 pips - limiting to 1000 pips
+[09:24:25] [09:24:25] 🔧 Converting $101130.26 to 1000.0 pips for BTCUSDm
+[09:24:25] [09:24:25] 🔍 Balance% calculation: 4.0% of $5056512.79 = $202260.51
+[09:24:25] [09:24:25] ⚠️ Balance% calculated 2022605116.0 pips - limiting to 1000 pips
+[09:24:25] [09:24:25] 🔧 Converting $202260.51 to 1000.0 pips for BTCUSDm
+[09:24:25] [09:24:25] 🔧 BTCUSDm Validation: Point=0.01, Digits=2, Min Distance=50 pips
+[09:24:25] [09:24:25] 🔧 Enhanced TP/SL calculation:
+[09:24:25] [09:24:25]    TP: 2 balance% → 121628.20
+[09:24:25] [09:24:25]    SL: 4 balance% → 121608.20
+[09:24:25] [09:24:25]    Entry: 121618.20
+[09:24:25] [09:24:25] ✅ Valid TP/SL levels will be sent with order
+[09:24:25] [09:24:25] 🎯 Executing BUY signal for BTCUSDm
+[09:24:25] [09:24:25] 📋 Using strategy: Scalping
+[09:24:25] [09:24:25] 📊 Parameters: Lot=0.01, TP=2.0 pips, SL=4.0 pips
+[09:24:25] [09:24:25] 📤 Final Order Request for BTCUSDm:
+[09:24:25] [09:24:25]    Action: BUY | Type: 0
+[09:24:25] [09:24:25]    Volume: 0.01 | Price: 121627.60
+[09:24:25] [09:24:25]    TP: 121628.20 | SL: 121608.20
+[09:24:25] [09:24:25]    Fill Mode: 1 | Deviation: 50
+[09:24:25] [09:24:25]    Magic: 234000 | Comment: Scalping Auto Trade
+[09:24:25] [09:24:25] ✅ Order includes TP/SL levels - will be executed with stops
+[09:24:25] [09:24:25] 📤 Sending BUY order for BTCUSDm:
+[09:24:25] [09:24:25]    Volume: 0.01
+[09:24:25] [09:24:25]    Price: 121627.6
+[09:24:25] [09:24:25]    TP: 121628.2
+[09:24:25] [09:24:25]    SL: 121608.2
+[09:24:25] [09:24:25]    Comment: Scalping Auto Trade
+[09:24:25] [09:24:25] ❌ Order failed: Code 10016 - Invalid stops
+[09:24:25] [09:24:25] 💡 Invalid stops - TP/SL too close to market price or wron
