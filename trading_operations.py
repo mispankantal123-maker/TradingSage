@@ -89,7 +89,7 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     return current_price * (1 + percentage / 100)  # SL above entry
                     
         elif unit.lower() in ["balance%", "balance_percent"]:
-            # Mode 3B: BALANCE PERCENTAGE - Based on account balance
+            # Mode 3B: BALANCE PERCENTAGE - Based on account balance (CORRECTED)
             if not account_info:
                 logger(f"❌ Cannot get account info for balance% calculation")
                 return 0.0
@@ -97,18 +97,45 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             balance = account_info.balance
             percentage_amount = balance * (abs_value / 100)  # Amount in currency
             
-            # Convert to price distance based on lot size and pip value
-            pip_value = calculate_pip_value(symbol, lot_size)
-            if pip_value <= 0:
-                pip_value = 10.0  # Fallback
-                
-            pips_distance = percentage_amount / pip_value
-            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            logger(f"🔍 Balance% calculation: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f}")
             
-            logger(f"💰 Balance%: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
+            # Convert currency amount to price distance
+            symbol_info = mt5.symbol_info(symbol)
+            if not symbol_info:
+                logger(f"❌ Cannot get symbol info for {symbol}")
+                return 0.0
+                
+            # Get contract size and point value for proper conversion
+            contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
+            point = getattr(symbol_info, 'point', 0.00001)
+            digits = getattr(symbol_info, 'digits', 5)
+            
+            # Calculate price distance based on percentage amount
+            # For lot size calculation: percentage_amount / (contract_size * point)
+            pip_value = lot_size * contract_size * point
+            if pip_value > 0:
+                pip_distance = percentage_amount / pip_value
+            else:
+                pip_distance = abs_value  # Fallback to pip-based calculation
+                
+            logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
+            
+            # Calculate final price
+            if is_negative:
+                if order_type.upper() == "BUY":
+                    return round(current_price - (pip_distance * point), digits)  # SL below entry
+                else:  # SELL
+                    return round(current_price + (pip_distance * point), digits)  # SL above entry
+            else:
+                if order_type.upper() == "BUY":
+                    return round(current_price + (pip_distance * point), digits)  # TP above entry
+                else:  # SELL
+                    return round(current_price - (pip_distance * point), digits)  # TP below entry
+            
+
             
         elif unit.lower() in ["equity%", "equity_percent"]:
-            # Mode 3C: EQUITY PERCENTAGE - Based on account equity
+            # Mode 3C: EQUITY PERCENTAGE - Based on account equity (CORRECTED)
             if not account_info:
                 logger(f"❌ Cannot get account info for equity% calculation")
                 return 0.0
@@ -116,31 +143,39 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             equity = account_info.equity
             percentage_amount = equity * (abs_value / 100)  # Amount in currency
             
-            # Convert to price distance based on lot size and pip value  
-            pip_value = calculate_pip_value(symbol, lot_size)
-            if pip_value <= 0:
-                pip_value = 10.0  # Fallback
-                
-            pips_distance = percentage_amount / pip_value
-            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            logger(f"🔍 Equity% calculation: {abs_value}% of ${equity:.2f} = ${percentage_amount:.2f}")
             
-            logger(f"💰 Equity%: {abs_value}% of ${equity:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
-            if not account_info:
-                logger(f"❌ Cannot get account info for equity% calculation")
+            # Convert currency amount to price distance
+            symbol_info = mt5.symbol_info(symbol)
+            if not symbol_info:
+                logger(f"❌ Cannot get symbol info for {symbol}")
                 return 0.0
                 
-            equity = account_info.equity
-            percentage_amount = equity * (abs_value / 100)  # Amount in currency
+            # Get contract size and point value for proper conversion
+            contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
+            point = getattr(symbol_info, 'point', 0.00001)
+            digits = getattr(symbol_info, 'digits', 5)
             
-            # Convert to price distance based on lot size and pip value  
-            pip_value = calculate_pip_value(symbol, lot_size)
-            if pip_value <= 0:
-                pip_value = 10.0  # Fallback
+            # Calculate price distance based on percentage amount
+            pip_value = lot_size * contract_size * point
+            if pip_value > 0:
+                pip_distance = percentage_amount / pip_value
+            else:
+                pip_distance = abs_value  # Fallback to pip-based calculation
                 
-            pips_distance = percentage_amount / pip_value
-            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
             
-            logger(f"💰 Equity%: {abs_value}% of ${equity:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
+            # Calculate final price
+            if is_negative:
+                if order_type.upper() == "BUY":
+                    return round(current_price - (pip_distance * point), digits)  # SL below entry
+                else:  # SELL
+                    return round(current_price + (pip_distance * point), digits)  # SL above entry
+            else:
+                if order_type.upper() == "BUY":
+                    return round(current_price + (pip_distance * point), digits)  # TP above entry
+                else:  # SELL
+                    return round(current_price - (pip_distance * point), digits)  # TP below entry
             
         elif unit.lower() == "money":
             # Mode 4: MONEY - Fixed currency amount for TP/SL
@@ -656,42 +691,75 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
         sl_price = calculate_tp_sl_all_modes(f"-{sl_value}", sl_unit, symbol, action, current_price, lot_size)
         
-        # CRITICAL FIX: Always ensure valid TP/SL calculation for Windows MT5
-        if tp_price <= 0.0 or tp_price == current_price:
-            logger(f"⚠️ TP calculation invalid ({tp_price}), using direct pip calculation")
-            symbol_info = mt5.symbol_info(symbol)
-            # Use larger point values for XAUUSDm (Gold CFD)
-            if 'XAU' in symbol and 'm' in symbol:
-                point = 0.01  # Gold CFD point
-            elif 'XAU' in symbol:
-                point = 0.01  # Gold spot point  
-            else:
-                point = getattr(symbol_info, 'point', 0.00001) if symbol_info else 0.00001
+        # CRITICAL FIX: XAUUSDm Error 10016 Prevention - Enhanced TP/SL validation
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info:
+            point = getattr(symbol_info, 'point', 0.00001)
+            digits = getattr(symbol_info, 'digits', 5)
+            trade_stops_level = getattr(symbol_info, 'trade_stops_level', 0)
             
-            # Calculate TP with minimum 20 pips for safety
-            pip_distance = max(float(tp_value), 20.0)
-            if action.upper() == "BUY":
-                tp_price = round(current_price + (pip_distance * point), symbol_info.digits if symbol_info else 3)
-            else:  # SELL  
-                tp_price = round(current_price - (pip_distance * point), symbol_info.digits if symbol_info else 3)
-                
-        if sl_price <= 0.0 or sl_price == current_price:
-            logger(f"⚠️ SL calculation invalid ({sl_price}), using direct pip calculation")
-            symbol_info = mt5.symbol_info(symbol)
-            # Use larger point values for XAUUSDm (Gold CFD)
-            if 'XAU' in symbol and 'm' in symbol:
-                point = 0.01  # Gold CFD point
-            elif 'XAU' in symbol:
-                point = 0.01  # Gold spot point
+            # Special handling for Gold (XAUUSDm, XAUUSD, etc)
+            if 'XAU' in symbol.upper():
+                point = 0.01  # Gold point value
+                digits = 2    # Gold digits
+                min_distance_pips = max(trade_stops_level, 100)  # Gold minimum 100 pips
+            elif 'JPY' in symbol:
+                min_distance_pips = max(trade_stops_level, 20)   # JPY minimum 20 pips
             else:
-                point = getattr(symbol_info, 'point', 0.00001) if symbol_info else 0.00001
+                min_distance_pips = max(trade_stops_level, 10)   # Forex minimum 10 pips
             
-            # Calculate SL with minimum 10 pips for safety
-            pip_distance = max(float(sl_value), 10.0)
+            min_distance_price = min_distance_pips * point
+            
+            logger(f"🔧 {symbol} Validation: Point={point}, Digits={digits}, Min Distance={min_distance_pips} pips")
+        else:
+            # Fallback values
+            point = 0.01 if 'XAU' in symbol.upper() else 0.00001
+            digits = 2 if 'XAU' in symbol.upper() else 5
+            min_distance_price = 1.0 if 'XAU' in symbol.upper() else 0.0001
+            
+            logger(f"⚠️ Using fallback values for {symbol}")
+        
+        # Validate and correct TP price
+        if tp_price <= 0.0 or abs(tp_price - current_price) < min_distance_price:
+            logger(f"⚠️ TP invalid ({tp_price}) or too close to price ({current_price})")
+            
+            # Force minimum distance
+            safe_distance = min_distance_price * 2  # Double the minimum for safety
             if action.upper() == "BUY":
-                sl_price = round(current_price - (pip_distance * point), symbol_info.digits if symbol_info else 3)
+                tp_price = round(current_price + safe_distance, digits)
             else:  # SELL
-                sl_price = round(current_price + (pip_distance * point), symbol_info.digits if symbol_info else 3)
+                tp_price = round(current_price - safe_distance, digits)
+                
+            logger(f"🔧 Corrected TP: {tp_price} (Distance: {safe_distance})")
+                
+        # Validate and correct SL price  
+        if sl_price <= 0.0 or abs(sl_price - current_price) < min_distance_price:
+            logger(f"⚠️ SL invalid ({sl_price}) or too close to price ({current_price})")
+            
+            # Force minimum distance
+            safe_distance = min_distance_price * 1.5  # 1.5x minimum for SL
+            if action.upper() == "BUY":
+                sl_price = round(current_price - safe_distance, digits)
+            else:  # SELL  
+                sl_price = round(current_price + safe_distance, digits)
+                
+            logger(f"🔧 Corrected SL: {sl_price} (Distance: {safe_distance})")
+        
+        # Final validation - ensure TP/SL are in correct direction
+        if action.upper() == "BUY":
+            if tp_price <= current_price:
+                tp_price = round(current_price + (min_distance_price * 2), digits)
+                logger(f"🔧 Fixed BUY TP direction: {tp_price}")
+            if sl_price >= current_price:
+                sl_price = round(current_price - (min_distance_price * 1.5), digits)
+                logger(f"🔧 Fixed BUY SL direction: {sl_price}")
+        else:  # SELL
+            if tp_price >= current_price:
+                tp_price = round(current_price - (min_distance_price * 2), digits)
+                logger(f"🔧 Fixed SELL TP direction: {tp_price}")
+            if sl_price <= current_price:
+                sl_price = round(current_price + (min_distance_price * 1.5), digits)
+                logger(f"🔧 Fixed SELL SL direction: {sl_price}")
         
         logger(f"🔧 Enhanced TP/SL calculation:")
         logger(f"   TP: {tp_value} {tp_unit} → {tp_price:.2f}")

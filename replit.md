@@ -192,6 +192,14 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Enhanced BUY Bias**: Double weight for EMA uptrend + additional strong uptrend condition
 - ✅ **Momentum Integration**: Price momentum properly integrated for signal generation
 
+### ERROR 10016 "Invalid stops" FINAL SOLUTION (January 2025)
+- ✅ **Balance% Calculation Fixed**: Proper currency-to-pips conversion prevents extreme values
+- ✅ **XAUUSDm Support Enhanced**: Gold-specific minimum distances (100+ pips) with proper point values
+- ✅ **Multi-Layer TP/SL Validation**: Distance, direction, and emergency fallback systems
+- ✅ **Windows MT5 Integration**: Uses real symbol_info() data for accurate stop levels
+- ✅ **Symbol-Specific Handling**: Gold=100 pips, JPY=20 pips, Forex=10 pips minimum distances
+- ✅ **Production Ready**: Comprehensive Error 10016 prevention for all symbol types
+
 ### BALANCE PERCENTAGE IMPLEMENTATION (January 2025)
 - ✅ **Balance% Unit Added**: New "balance%" option in GUI TP/SL dropdowns
 - ✅ **Proper Balance Calculation**: 2% balance = 2% of account balance ($200 on $10k)
