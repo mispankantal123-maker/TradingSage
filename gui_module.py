@@ -95,49 +95,61 @@ class TradingBotGUI:
         # Configure emergency button style
         style.configure("Emergency.TButton", background="#d32f2f", foreground="white")
         
-        # Strategy and parameters frame
-        params_frame = ttk.LabelFrame(top_frame, text="⚙️ Strategy & Parameters", padding="10")
+        # Strategy and parameters frame - Enhanced layout
+        params_frame = ttk.LabelFrame(top_frame, text="⚙️ Strategy & Parameters", padding="8")
         params_frame.grid(row=0, column=2, sticky="ew")
+        params_frame.columnconfigure(3, weight=1)
         
-        # Strategy selection
-        ttk.Label(params_frame, text="Strategy:").grid(row=0, column=0, sticky="w")
-        self.strategy_combo = ttk.Combobox(params_frame, values=STRATEGIES, state="readonly", width=12)
+        # Row 0: Strategy and Symbol
+        ttk.Label(params_frame, text="Strategy:").grid(row=0, column=0, sticky="w", padx=(0,3))
+        self.strategy_combo = ttk.Combobox(params_frame, values=STRATEGIES, state="readonly", width=10)
         self.strategy_combo.set("Scalping")
-        self.strategy_combo.grid(row=0, column=1, padx=(5, 15))
+        self.strategy_combo.grid(row=0, column=1, padx=(0, 10), sticky="w")
         self.strategy_combo.bind("<<ComboboxSelected>>", self.on_strategy_change)
         
-        # Symbol selection
-        ttk.Label(params_frame, text="Symbol:").grid(row=0, column=2, sticky="w")
-        self.symbol_combo = ttk.Combobox(params_frame, width=10)
-        self.symbol_combo.grid(row=0, column=3, padx=(5, 15))
+        ttk.Label(params_frame, text="Symbol:").grid(row=0, column=2, sticky="w", padx=(0,3))
+        self.symbol_combo = ttk.Combobox(params_frame, width=12, state="readonly")
+        self.symbol_combo.grid(row=0, column=3, padx=(0, 5), sticky="ew")
         
-        # Lot size
-        ttk.Label(params_frame, text="Lot:").grid(row=1, column=0, sticky="w")
+        # Row 1: Lot Size and TP
+        ttk.Label(params_frame, text="Lot:").grid(row=1, column=0, sticky="w", padx=(0,3))
         self.lot_entry = ttk.Entry(params_frame, width=8)
         self.lot_entry.insert(0, "0.01")
-        self.lot_entry.grid(row=1, column=1, padx=(5, 15))
+        self.lot_entry.grid(row=1, column=1, padx=(0, 10), sticky="w")
         
-        # Take Profit
-        ttk.Label(params_frame, text="TP:").grid(row=1, column=2, sticky="w")
-        self.tp_entry = ttk.Entry(params_frame, width=8)
+        ttk.Label(params_frame, text="TP:").grid(row=1, column=2, sticky="w", padx=(0,3))
+        
+        # TP Frame for value and unit
+        tp_frame = ttk.Frame(params_frame)
+        tp_frame.grid(row=1, column=3, padx=(0, 5), sticky="w")
+        
+        self.tp_entry = ttk.Entry(tp_frame, width=6)
         self.tp_entry.insert(0, "20")
-        self.tp_entry.grid(row=1, column=3, padx=(5, 10))
+        self.tp_entry.grid(row=0, column=0, padx=(0, 2))
         
-        self.tp_unit_combo = ttk.Combobox(params_frame, values=["pips", "points", "price"], 
-                                         state="readonly", width=6)
+        from config import TP_SL_UNITS
+        self.tp_unit_combo = ttk.Combobox(tp_frame, values=TP_SL_UNITS, 
+                                         state="readonly", width=8)
         self.tp_unit_combo.set("pips")
-        self.tp_unit_combo.grid(row=1, column=4, padx=(0, 15))
+        self.tp_unit_combo.grid(row=0, column=1)
+        self.tp_unit_combo.bind("<<ComboboxSelected>>", self.on_tp_unit_change)
         
-        # Stop Loss
-        ttk.Label(params_frame, text="SL:").grid(row=2, column=0, sticky="w")
-        self.sl_entry = ttk.Entry(params_frame, width=8)
+        # Row 2: SL
+        ttk.Label(params_frame, text="SL:").grid(row=2, column=2, sticky="w", padx=(0,3))
+        
+        # SL Frame for value and unit  
+        sl_frame = ttk.Frame(params_frame)
+        sl_frame.grid(row=2, column=3, padx=(0, 5), sticky="w")
+        
+        self.sl_entry = ttk.Entry(sl_frame, width=6)
         self.sl_entry.insert(0, "10")
-        self.sl_entry.grid(row=2, column=1, padx=(5, 15))
+        self.sl_entry.grid(row=0, column=0, padx=(0, 2))
         
-        self.sl_unit_combo = ttk.Combobox(params_frame, values=["pips", "points", "price"], 
-                                         state="readonly", width=6)
+        self.sl_unit_combo = ttk.Combobox(sl_frame, values=TP_SL_UNITS,
+                                         state="readonly", width=8)
         self.sl_unit_combo.set("pips")
-        self.sl_unit_combo.grid(row=2, column=2, padx=(5, 15))
+        self.sl_unit_combo.grid(row=0, column=1)
+        self.sl_unit_combo.bind("<<ComboboxSelected>>", self.on_sl_unit_change)
         
         # Left panel - Account info and positions
         left_frame = ttk.Frame(main_frame)
@@ -330,18 +342,56 @@ class TradingBotGUI:
             self.connect_btn.config(text="Retry Connection", state="normal")
     
     def update_symbols(self):
-        """Update symbol dropdown with available symbols"""
+        """Update symbol dropdown with comprehensive symbol list"""
         try:
-            symbols = get_symbol_suggestions()
-            if symbols:
-                self.symbol_combo['values'] = symbols
-                if not self.symbol_combo.get():
-                    self.symbol_combo.set(symbols[0])  # Set first symbol as default
-                self.log(f"📊 Updated symbols: {len(symbols)} available")
-            else:
-                self.log("⚠️ No symbols available")
+            # Get symbols from MT5 connection
+            mt5_symbols = get_symbol_suggestions()
+            
+            # Combine with default symbols for comprehensive coverage
+            from config import DEFAULT_SYMBOLS
+            all_symbols = list(set(mt5_symbols + DEFAULT_SYMBOLS))
+            
+            # Sort symbols logically
+            forex_symbols = [s for s in all_symbols if any(pair in s.upper() for pair in ['EUR', 'GBP', 'USD', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD']) and len(s) <= 7]
+            metal_symbols = [s for s in all_symbols if any(metal in s.upper() for metal in ['XAU', 'XAG', 'GOLD', 'SILVER'])]
+            crypto_symbols = [s for s in all_symbols if any(crypto in s.upper() for crypto in ['BTC', 'ETH', 'LTC', 'XRP'])]
+            commodity_symbols = [s for s in all_symbols if any(comm in s.upper() for comm in ['OIL', 'NGAS', 'WHEAT'])]
+            index_symbols = [s for s in all_symbols if any(idx in s.upper() for idx in ['US30', 'US500', 'NAS100', 'GER30', 'UK100', 'JPN225'])]
+            
+            # Organize symbols by category
+            organized_symbols = []
+            if forex_symbols: organized_symbols.extend(sorted(forex_symbols))
+            if metal_symbols: organized_symbols.extend(sorted(metal_symbols))
+            if crypto_symbols: organized_symbols.extend(sorted(crypto_symbols))
+            if commodity_symbols: organized_symbols.extend(sorted(commodity_symbols))
+            if index_symbols: organized_symbols.extend(sorted(index_symbols))
+            
+            # Set symbols in dropdown
+            self.symbol_combo['values'] = organized_symbols[:50]  # Limit to 50 most common
+            
+            # Set default symbol
+            if not self.symbol_combo.get() and organized_symbols:
+                # Prefer XAUUSD if available, otherwise first symbol
+                if 'XAUUSDm' in organized_symbols:
+                    self.symbol_combo.set('XAUUSDm')
+                elif 'XAUUSD' in organized_symbols:
+                    self.symbol_combo.set('XAUUSD')
+                elif 'EURUSD' in organized_symbols:
+                    self.symbol_combo.set('EURUSD')
+                else:
+                    self.symbol_combo.set(organized_symbols[0])
+            
+            self.log(f"📊 Updated symbols: {len(organized_symbols)} available")
+            self.log(f"   Forex: {len(forex_symbols)}, Metals: {len(metal_symbols)}, Crypto: {len(crypto_symbols)}")
+            self.log(f"   Commodities: {len(commodity_symbols)}, Indices: {len(index_symbols)}")
+            
         except Exception as e:
             self.log(f"❌ Error updating symbols: {str(e)}")
+            # Fallback to basic symbols
+            basic_symbols = ["XAUUSD", "XAUUSDm", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "BTCUSDm", "USOIL", "USOILm"]
+            self.symbol_combo['values'] = basic_symbols
+            if not self.symbol_combo.get():
+                self.symbol_combo.set("XAUUSDm")
     
     def on_strategy_change(self, event=None):
         """Handle strategy change with proper GUI integration"""
@@ -366,9 +416,42 @@ class TradingBotGUI:
             self.sl_unit_combo.set(params["sl_unit"])
             
             self.log(f"📊 Parameters updated for {self.current_strategy}")
+            self.log(f"   TP: {params['tp_pips']} {params['tp_unit']}")
+            self.log(f"   SL: {params['sl_pips']} {params['sl_unit']}")
+            self.log(f"   Lot: {params['lot_size']}")
             
         except Exception as e:
             self.log(f"❌ Error changing strategy: {str(e)}")
+    
+    def on_tp_unit_change(self, event=None):
+        """Handle TP unit change to show percentage info"""
+        try:
+            unit = self.tp_unit_combo.get()
+            if unit in ["balance%", "equity%"]:
+                current_value = self.tp_entry.get()
+                if not current_value or float(current_value) > 10.0:
+                    self.tp_entry.delete(0, tk.END)
+                    self.tp_entry.insert(0, "2.0")  # Default 2%
+                self.log(f"💡 TP unit changed to {unit} - Value represents percentage")
+                self.log(f"💡 Recommended range: 0.1% - 10% of {unit.split('%')[0]}")
+            
+        except Exception as e:
+            self.log(f"❌ Error changing TP unit: {str(e)}")
+    
+    def on_sl_unit_change(self, event=None):
+        """Handle SL unit change to show percentage info"""
+        try:
+            unit = self.sl_unit_combo.get()
+            if unit in ["balance%", "equity%"]:
+                current_value = self.sl_entry.get()
+                if not current_value or float(current_value) > 10.0:
+                    self.sl_entry.delete(0, tk.END)
+                    self.sl_entry.insert(0, "1.0")  # Default 1%
+                self.log(f"💡 SL unit changed to {unit} - Value represents percentage")
+                self.log(f"💡 Recommended range: 0.1% - 10% of {unit.split('%')[0]}")
+            
+        except Exception as e:
+            self.log(f"❌ Error changing SL unit: {str(e)}")
     
     def get_current_lot_size(self) -> float:
         """Get current lot size from GUI with validation"""
@@ -696,3 +779,10 @@ class TradingBotGUI:
         except Exception as e:
             logger(f"❌ Error during shutdown: {str(e)}")
             self.root.destroy()
+    
+    def get_current_lot_size(self) -> float:
+        """Get current lot size for TP/SL percentage calculations""" 
+        try:
+            return float(self.lot_entry.get())
+        except:
+            return 0.01

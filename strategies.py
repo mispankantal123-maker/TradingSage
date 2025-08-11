@@ -175,16 +175,19 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Price broke below Bollinger Lower")
             sell_signals += 1
         
+        # FIXED: Lower signal threshold for more aggressive scalping entries
+        signal_threshold = 1  # Reduced from 2 to 1 for faster signals
+        
         # Determine action
         action = None
-        if buy_signals >= 2 and buy_signals > sell_signals:
+        if buy_signals >= signal_threshold and buy_signals > sell_signals:
             action = "BUY"
             logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
-        elif sell_signals >= 2 and sell_signals > buy_signals:
-            action = "SELL"
+        elif sell_signals >= signal_threshold and sell_signals > buy_signals:
+            action = "SELL" 
             logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
         else:
-            logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need 2+ dominant)")
+            logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need {signal_threshold}+ dominant)")
         
         return action, signals
         

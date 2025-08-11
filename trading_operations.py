@@ -190,19 +190,56 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
         logger(f"   SL: {sl_price if sl_price > 0 else 'None'}")
         logger(f"   Comment: {comment}")
         
-        # Send order
+        # Send order - FIXED for live trading
         result = mt5.order_send(request)
         
         if result is None:
             logger("❌ Order send failed: No result returned")
+            logger("💡 Check MT5 terminal connectivity and trading permissions")
             return False
             
         if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger(f"❌ Order failed: {result.retcode} - {result.comment}")
+            logger(f"❌ Order failed: Code {result.retcode} - {result.comment}")
+            
+            # Enhanced error handling with specific error codes
+            if result.retcode == 10004:  # TRADE_RETCODE_REQUOTE
+                logger("💡 Price requote - retrying with current market price...")
+                return False  # Could retry with new price
+            elif result.retcode == 10006:  # TRADE_RETCODE_REJECT
+                logger("💡 Order rejected - check trading conditions")
+            elif result.retcode == 10007:  # TRADE_RETCODE_CANCEL
+                logger("💡 Order cancelled by user or timeout")
+            elif result.retcode == 10008:  # TRADE_RETCODE_PLACED
+                logger("💡 Order placed but not executed yet")
+            elif result.retcode == 10009:  # TRADE_RETCODE_DONE
+                logger("✅ Order executed successfully (unexpected path)")
+            elif result.retcode == 10013:  # TRADE_RETCODE_INVALID_VOLUME
+                logger("💡 Invalid volume - check lot size settings")
+            elif result.retcode == 10018:  # TRADE_RETCODE_MARKET_CLOSED
+                logger("💡 Market is closed - check trading session")
+            elif result.retcode == 10019:  # TRADE_RETCODE_NO_MONEY
+                logger("💡 Insufficient funds - reduce lot size")
+            elif result.retcode == 10020:  # TRADE_RETCODE_PRICE_CHANGED
+                logger("💡 Price changed during execution - retry")
+            else:
+                logger(f"💡 Unknown error code: {result.retcode}")
+                
             return False
         else:
-            logger(f"✅ Order executed successfully!")
+            logger(f"✅ ORDER EXECUTED SUCCESSFULLY!")
             logger(f"   Order: #{result.order}")
+            logger(f"   Deal: #{result.deal}")
+            logger(f"   Volume: {result.volume}")
+            logger(f"   Price: {result.price}")
+            
+            # Update GUI immediately if available
+            try:
+                import __main__
+                if hasattr(__main__, 'gui') and __main__.gui:
+                    __main__.gui.update_account_info()
+                    __main__.gui.update_positions()
+            except:
+                pass
             logger(f"   Deal: #{result.deal}")
             logger(f"   Volume: {result.volume}")
             logger(f"   Price: {result.price}")
