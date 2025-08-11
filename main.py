@@ -73,11 +73,9 @@ def create_main_window():
         gui = TradingBotGUI(root)
         
         # Set global GUI reference for other modules
-        import __main__
-        __main__.gui = gui
-        __main__.start_bot_thread = start_bot_thread
-        __main__.stop_bot = stop_bot
-        __main__.bot_running = False  # Will be updated by bot_controller
+        # Note: In Replit environment, we handle global state through module imports
+        global bot_running
+        bot_running = False  # Will be updated by bot_controller
         
         # Show window
         root.deiconify()

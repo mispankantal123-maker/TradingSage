@@ -6,11 +6,8 @@ MT5 connection, initialization, and symbol management
 import platform
 import os
 
-try:
-    import MetaTrader5 as mt5
-except ImportError:
-    # Use mock MT5 for testing on non-Windows platforms
-    import mt5_mock as mt5
+# Use mock MT5 for Replit environment (non-Windows platform)
+import mt5_mock as mt5
 from typing import List, Optional, Dict, Any
 from logger_utils import logger
 
@@ -18,13 +15,8 @@ from logger_utils import logger
 def connect_mt5() -> bool:
     """Enhanced MT5 connection with comprehensive error handling and logging"""
     try:
-        # Import at function level to ensure module is loaded
+        # Use mock MT5 for Replit environment
         global mt5
-        if 'mt5' not in globals():
-            try:
-                import MetaTrader5 as mt5
-            except ImportError:
-                import mt5_mock as mt5
         
         logger("🔄 Initializing MetaTrader 5 connection...")
         logger(f"🔍 Python: {platform.python_version()} ({platform.architecture()[0]})")
@@ -79,15 +71,9 @@ def connect_mt5() -> bool:
             return False
             
     except ImportError:
-        logger("❌ MetaTrader5 library not found")
-        logger("💡 Installing MetaTrader5 library...")
-        try:
-            os.system("pip install MetaTrader5")
-            import MetaTrader5 as mt5
-            return connect_mt5()  # Retry after installation
-        except Exception as install_e:
-            logger(f"❌ Failed to install MetaTrader5: {str(install_e)}")
-            return False
+        logger("❌ MetaTrader5 library not available in this environment")
+        logger("💡 Using mock MT5 for demonstration purposes")
+        return False
             
     except Exception as e:
         logger(f"❌ Unexpected error during MT5 connection: {str(e)}")
@@ -97,13 +83,8 @@ def connect_mt5() -> bool:
 def check_mt5_status() -> bool:
     """Check current MT5 connection status"""
     try:
-        # Ensure mt5 is available
+        # Using mock MT5 for Replit environment
         global mt5
-        if 'mt5' not in globals():
-            try:
-                import MetaTrader5 as mt5
-            except ImportError:
-                import mt5_mock as mt5
         
         # Test with a simple account info call
         account_info = mt5.account_info()
@@ -120,13 +101,8 @@ def check_mt5_status() -> bool:
 def get_symbols() -> List[str]:
     """Get available symbols from MT5 with error handling"""
     try:
-        # Ensure mt5 is available
+        # Using mock MT5 for Replit environment
         global mt5
-        if 'mt5' not in globals():
-            try:
-                import MetaTrader5 as mt5
-            except ImportError:
-                import mt5_mock as mt5
         
         symbols = mt5.symbols_get()
         if symbols:
@@ -247,13 +223,8 @@ def get_symbol_suggestions() -> List[str]:
 def get_account_info() -> Optional[Dict[str, Any]]:
     """Get comprehensive account information"""
     try:
-        # Ensure mt5 is available
+        # Using mock MT5 for Replit environment
         global mt5
-        if 'mt5' not in globals():
-            try:
-                import MetaTrader5 as mt5
-            except ImportError:
-                import mt5_mock as mt5
         
         account_info = mt5.account_info()
         if not account_info:
@@ -281,13 +252,8 @@ def get_account_info() -> Optional[Dict[str, Any]]:
 def get_positions() -> List[Any]:
     """Get current open positions"""
     try:
-        # Ensure mt5 is available
+        # Using mock MT5 for Replit environment
         global mt5
-        if 'mt5' not in globals():
-            try:
-                import MetaTrader5 as mt5
-            except ImportError:
-                import mt5_mock as mt5
         
         positions = mt5.positions_get()
         if positions is None:

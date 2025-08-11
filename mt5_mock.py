@@ -69,7 +69,7 @@ _positions = []
 _last_error = (0, "No error")
 
 
-def initialize(path: str = None) -> bool:
+def initialize(path: Optional[str] = None) -> bool:
     """Mock MT5 initialization"""
     global _connected
     _connected = True
@@ -247,7 +247,7 @@ def order_send(request: dict) -> dict:
     price = request.get('price', 0.0)
     
     # Add position to global state with TP/SL
-    if symbol in _symbols_data:
+    if symbol and symbol in _symbols_data:
         position = Position(
             ticket=ticket,
             symbol=symbol,
@@ -277,7 +277,7 @@ def order_send(request: dict) -> dict:
     }
 
 
-def positions_get(symbol: str = None) -> Optional[List[Position]]:
+def positions_get(symbol: Optional[str] = None) -> Optional[List[Position]]:
     """Mock positions with TP/SL support"""
     if not _connected:
         return None
@@ -288,7 +288,7 @@ def positions_get(symbol: str = None) -> Optional[List[Position]]:
     return _positions
 
 
-def orders_get(symbol: str = None) -> Optional[List]:
+def orders_get(symbol: Optional[str] = None) -> Optional[List]:
     """Mock pending orders"""
     if not _connected:
         return None
