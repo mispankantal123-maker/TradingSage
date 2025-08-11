@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, Tuple
 from logger_utils import logger, log_order_csv
 from validation_utils import validate_tp_sl_levels, validate_trading_conditions
 from config import DEFAULT_PARAMS
+from telegram_notifications import notify_trade_executed, notify_position_closed
 
 try:
     import MetaTrader5 as mt5
@@ -743,6 +744,12 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         
         if success:
             logger(f"✅ {action} order executed successfully for {symbol}")
+            
+            # Send Telegram notification for successful trade
+            try:
+                notify_trade_executed(symbol, action, lot_size, current_price, tp_price, sl_price, current_strategy)
+            except Exception as telegram_error:
+                logger(f"⚠️ Telegram notification failed: {str(telegram_error)}")
         else:
             logger(f"❌ Failed to execute {action} order for {symbol}")
             

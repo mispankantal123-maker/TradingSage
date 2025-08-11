@@ -18,6 +18,7 @@ from mt5_connection import connect_mt5, get_account_info, get_positions, get_sym
 from validation_utils import validate_numeric_input
 from risk_management import get_current_risk_metrics
 from performance_tracking import generate_performance_report
+from telegram_notifications import notify_bot_status, notify_strategy_change, notify_balance_update, test_telegram_connection
 
 
 class TradingBotGUI:
@@ -284,6 +285,13 @@ class TradingBotGUI:
                         
                         self.log("🚀 GUI-MT5 connection established successfully!")
                         self.log("🚀 Ready to start automated trading!")
+                        
+                        # Test Telegram notifications
+                        self.log("📱 Testing Telegram connection...")
+                        if test_telegram_connection():
+                            self.log("✅ Telegram notifications active")
+                        else:
+                            self.log("⚠️ Telegram notifications failed")
                 except Exception as info_e:
                     self.log(f"⚠️ Error getting account details: {str(info_e)}")
             else:
@@ -429,6 +437,16 @@ class TradingBotGUI:
             self.log(f"   SL: {params['sl_pips']} {params['sl_unit']}")
             self.log(f"   Lot: {params['lot_size']}")
             
+            # Send Telegram notification for strategy change
+            try:
+                old_strategy = getattr(self, '_previous_strategy', 'None')
+                tp_text = f"{params['tp_pips']} {params['tp_unit']}"
+                sl_text = f"{params['sl_pips']} {params['sl_unit']}"
+                notify_strategy_change(old_strategy, self.current_strategy, tp_text, sl_text, params['lot_size'])
+                self._previous_strategy = self.current_strategy
+            except Exception as e:
+                self.log(f"⚠️ Telegram strategy notification failed: {str(e)}")
+            
         except Exception as e:
             self.log(f"❌ Error changing strategy: {str(e)}")
     
@@ -557,6 +575,12 @@ class TradingBotGUI:
             
             self.bot_status_lbl.config(text="Bot: Running 🟢", foreground="green")
             self.log("✅ Trading bot started successfully!")
+            
+            # Send Telegram notification for bot start
+            try:
+                notify_bot_status("STARTED", f"Trading bot activated - Strategy: {self.current_strategy}, Symbol: {symbol}")
+            except Exception as telegram_e:
+                self.log(f"⚠️ Telegram start notification failed: {str(telegram_e)}")
             
         except Exception as e:
             self.log(f"❌ Error starting bot: {str(e)}")

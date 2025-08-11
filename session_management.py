@@ -7,6 +7,7 @@ import datetime
 from typing import Optional, Dict, Any
 from logger_utils import logger
 from config import TRADING_SESSIONS, CRITICAL_NEWS_TIMES
+from telegram_notifications import notify_session_change
 
 
 def is_high_impact_news_time() -> bool:

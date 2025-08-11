@@ -208,6 +208,17 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Session-Based Risk**: Different risk modifiers per session but all active
 - ✅ **True 24/7 Operation**: Bot can now trade continuously without time-based pauses
 
+### TELEGRAM NOTIFICATIONS SYSTEM (January 2025)
+- ✅ **Complete Integration**: Full Telegram Bot API integration with user's token/chat ID
+- ✅ **Real-time Trade Alerts**: Buy/sell orders with symbol, volume, price, TP/SL details
+- ✅ **Position Management**: Position closed notifications with profit/loss calculations
+- ✅ **Account Monitoring**: Balance, equity, margin level updates with formatting
+- ✅ **Strategy Notifications**: Strategy changes with parameter details
+- ✅ **Session Updates**: Trading session changes with volatility and recommendations
+- ✅ **Bot Status**: Start/stop/error notifications with comprehensive status messages
+- ✅ **Risk Alerts**: Risk management warnings and automated actions
+- ✅ **Daily Summaries**: End-of-day performance reports with statistics
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5
