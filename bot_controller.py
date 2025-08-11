@@ -38,19 +38,34 @@ def bot_thread() -> None:
         # Reset daily counters
         check_daily_limits()
         
-        # Main trading loop - Fixed stop mechanism
-        while bot_running:
+        # Main trading loop - FIXED stop mechanism
+        while True:
             try:
-                # Check bot_running flag (removed problematic global check that was causing auto-stop)
+                # CRITICAL: Check bot_running flag at the beginning of each iteration
                 if not bot_running:
-                    logger("🛑 Bot stopped - exiting trading loop")
+                    logger("🛑 Bot stop signal received - exiting trading loop immediately")
+                    break
+                
+                # CRITICAL: Second stop check before time validation
+                if not bot_running:
+                    logger("🛑 Bot stopped during time check")
                     break
                 
                 # Check if trading time is appropriate
                 if not check_trading_time():
                     logger("⏰ Outside trading hours, waiting...")
-                    time.sleep(60)  # Wait 1 minute before checking again
+                    # Check stop signal during wait
+                    for wait_second in range(60):
+                        if not bot_running:
+                            logger("🛑 Bot stopped during trading hours wait")
+                            return
+                        time.sleep(1)
                     continue
+                
+                # CRITICAL: Third stop check before MT5 validation
+                if not bot_running:
+                    logger("🛑 Bot stopped during MT5 check")
+                    break
                 
                 # Check MT5 connection status
                 if not check_mt5_status():
@@ -58,7 +73,12 @@ def bot_thread() -> None:
                     from mt5_connection import connect_mt5
                     if not connect_mt5():
                         logger("🔄 Waiting 30 seconds before retry...")
-                        time.sleep(30)
+                        # Check stop signal during retry wait
+                        for wait_second in range(30):
+                            if not bot_running:
+                                logger("🛑 Bot stopped during MT5 reconnection wait")
+                                return
+                            time.sleep(1)
                         continue
                 
                 # Risk management check
@@ -80,6 +100,11 @@ def bot_thread() -> None:
                     # Fallback to default strategy if GUI not accessible
                     current_strategy = "Scalping"
                 
+                # CRITICAL: Fourth stop check before symbol processing
+                if not bot_running:
+                    logger("🛑 Bot stopped before symbol processing")
+                    break
+                
                 # Get trading symbols
                 try:
                     import __main__
@@ -91,6 +116,11 @@ def bot_thread() -> None:
                     trading_symbols = DEFAULT_SYMBOLS[:3]
                 
                 logger(f"📊 Analyzing {len(trading_symbols)} symbols with {current_strategy} strategy")
+                
+                # CRITICAL: Fifth stop check before data retrieval
+                if not bot_running:
+                    logger("🛑 Bot stopped before data retrieval")
+                    break
                 
                 # Get data for all symbols
                 symbol_data = get_multiple_symbols_data(trading_symbols)
@@ -105,12 +135,22 @@ def bot_thread() -> None:
                 
                 for symbol, df in symbol_data.items():
                     try:
+                        # CRITICAL: Stop check at start of each symbol processing
+                        if not bot_running:
+                            logger(f"🛑 Bot stopped during {symbol} analysis")
+                            return
+                        
                         # Calculate indicators
                         df_with_indicators = calculate_indicators(df)
                         
                         if df_with_indicators is None:
                             logger(f"⚠️ Indicator calculation failed for {symbol}")
                             continue
+                        
+                        # CRITICAL: Stop check before strategy execution
+                        if not bot_running:
+                            logger(f"🛑 Bot stopped before strategy execution for {symbol}")
+                            return
                         
                         # Run strategy with current strategy from GUI
                         action, signals = run_strategy(current_strategy, df_with_indicators, symbol)
@@ -134,6 +174,11 @@ def bot_thread() -> None:
                             if len(signals) < signal_threshold:
                                 logger(f"⚪ {symbol}: Signal strength {len(signals)} below threshold {signal_threshold}")
                                 continue
+                            
+                            # CRITICAL: Final stop check before trade execution
+                            if not bot_running:
+                                logger(f"🛑 Bot stopped before executing trade for {symbol}")
+                                return
                             
                             # Execute trading signals with proper GUI parameter integration
                             logger(f"🎯 Executing {action} signal for {symbol}")
@@ -202,9 +247,13 @@ def bot_thread() -> None:
                 except:
                     pass
                 
-                # Wait before next cycle
+                # CRITICAL: Interruptible wait - check stop signal during wait
                 logger(f"⏳ Waiting {scan_interval} seconds before next scan...")
-                time.sleep(scan_interval)
+                for wait_second in range(scan_interval):
+                    if not bot_running:
+                        logger("🛑 Bot stopped during scan interval wait")
+                        return
+                    time.sleep(1)
                 
             except KeyboardInterrupt:
                 logger("⚠️ Bot interrupted by user")
@@ -256,20 +305,27 @@ def start_bot_thread():
 
 
 def stop_bot():
-    """Stop the trading bot"""
+    """Stop the trading bot immediately"""
     global bot_running
     
     if not bot_running:
         logger("ℹ️ Bot is not running")
         return
     
-    logger("🛑 Stopping trading bot...")
+    logger("🛑 EMERGENCY STOP - Setting bot_running to False immediately")
     bot_running = False
     
-    # Give time for current operations to complete
-    time.sleep(2)
+    # Force update GUI if available
+    try:
+        import __main__
+        if hasattr(__main__, 'gui') and __main__.gui:
+            __main__.gui.bot_status_lbl.config(text="Bot: Force Stopped 🔴", foreground="red")
+            __main__.gui.start_btn.config(state="normal")
+            __main__.gui.stop_btn.config(state="disabled")
+    except:
+        pass
     
-    logger("✅ Trading bot stopped")
+    logger("✅ Trading bot FORCE STOPPED - All operations halted")
 
 
 def start_auto_recovery_monitor():
