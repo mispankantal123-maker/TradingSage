@@ -76,17 +76,17 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             # This is for "percent" selection (price-based)
             percentage = abs_value
             
-            # Calculate percentage-based TP/SL directly from current price
-            if is_tp:  # Take Profit
+            # CORRECTED: Calculate percentage-based TP/SL with proper direction logic
+            if value < 0:  # Stop Loss (negative input)
                 if order_type.upper() == "BUY":
-                    return current_price * (1 + percentage / 100)  # TP above entry
+                    return current_price * (1 - percentage / 100)  # SL below entry for BUY
                 else:  # SELL
-                    return current_price * (1 - percentage / 100)  # TP below entry
-            else:  # Stop Loss
+                    return current_price * (1 + percentage / 100)  # SL above entry for SELL
+            else:  # Take Profit (positive input)
                 if order_type.upper() == "BUY":
-                    return current_price * (1 - percentage / 100)  # SL below entry
+                    return current_price * (1 + percentage / 100)  # TP above entry for BUY
                 else:  # SELL
-                    return current_price * (1 + percentage / 100)  # SL above entry
+                    return current_price * (1 - percentage / 100)  # TP below entry for SELL
                     
         elif unit.lower() in ["balance%", "balance_percent"]:
             # Mode 3B: BALANCE PERCENTAGE - COMPLETELY FIXED VERSION
@@ -185,18 +185,18 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     logger(f"⚠️ Balance% calculated {pip_distance:.1f} pips - enforcing {min_pips} pips minimum for {symbol}")
                     pip_distance = min_pips
                 
-                # Calculate final price - FIXED variable reference
+                # CRITICAL FIX: Correct TP/SL direction logic
                 is_stop_loss = value < 0  # Negative value = Stop Loss
-                if is_stop_loss:
+                if is_stop_loss:  # STOP LOSS calculation
                     if order_type.upper() == "BUY":
-                        return round(current_price - (pip_distance * point), digits)  # SL below entry
+                        return round(current_price - (pip_distance * point), digits)  # SL below entry for BUY
                     else:  # SELL
-                        return round(current_price + (pip_distance * point), digits)  # SL above entry
-                else:  # Take Profit
+                        return round(current_price + (pip_distance * point), digits)  # SL above entry for SELL
+                else:  # TAKE PROFIT calculation  
                     if order_type.upper() == "BUY":
-                        return round(current_price + (pip_distance * point), digits)  # TP above entry
+                        return round(current_price + (pip_distance * point), digits)  # TP above entry for BUY
                     else:  # SELL
-                        return round(current_price - (pip_distance * point), digits)  # TP below entry
+                        return round(current_price - (pip_distance * point), digits)  # TP below entry for SELL
                         
             except Exception as e:
                 logger(f"❌ Error calculating TP/SL (balance%): {e}")
@@ -442,9 +442,41 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
         logger(f"   Fill Mode: {fill_type} | Deviation: {request['deviation']}")
         logger(f"   Magic: {request['magic']} | Comment: {request['comment']}")
         
-        # CRITICAL: Validate TP/SL are properly set
+        # ENHANCED: Final TP/SL validation with minimum distance enforcement
         if request['tp'] > 0 or request['sl'] > 0:
+            # Final validation for minimum distances before sending to MT5
+            tp_distance = abs(request['tp'] - request['price']) if request['tp'] > 0 else 0
+            sl_distance = abs(request['sl'] - request['price']) if request['sl'] > 0 else 0
+            
+            # Asset-specific minimum distances (in price units)
+            symbol_upper = symbol.upper()
+            if 'XAU' in symbol_upper:  # Gold
+                min_distance = 1.00  # $1.00 minimum
+            elif 'BTC' in symbol_upper:  # Bitcoin
+                min_distance = 0.50  # $0.50 minimum
+            elif 'ETH' in symbol_upper:  # Ethereum
+                min_distance = 0.30  # $0.30 minimum
+            else:
+                min_distance = 0.0001  # Default for forex
+            
+            # Enforce minimum distances
+            if request['tp'] > 0 and tp_distance < min_distance:
+                logger(f"⚠️ TP distance {tp_distance:.4f} below minimum {min_distance} - adjusting")
+                if action == "BUY":
+                    request['tp'] = request['price'] + min_distance
+                else:  # SELL
+                    request['tp'] = request['price'] - min_distance
+                    
+            if request['sl'] > 0 and sl_distance < min_distance:
+                logger(f"⚠️ SL distance {sl_distance:.4f} below minimum {min_distance} - adjusting")
+                if action == "BUY":
+                    request['sl'] = request['price'] - min_distance
+                else:  # SELL
+                    request['sl'] = request['price'] + min_distance
+            
             logger(f"✅ Order includes TP/SL levels - will be executed with stops")
+            logger(f"   Final TP distance: {abs(request['tp'] - request['price']):.4f}")
+            logger(f"   Final SL distance: {abs(request['sl'] - request['price']):.4f}")
         else:
             logger(f"⚠️ Order WITHOUT TP/SL levels - executing market order only")
         
