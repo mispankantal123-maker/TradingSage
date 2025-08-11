@@ -11,11 +11,13 @@ from validation_utils import validate_tp_sl_levels, validate_trading_conditions
 from config import DEFAULT_PARAMS
 from telegram_notifications import notify_trade_executed, notify_position_closed
 
+# REAL MT5 for Windows Trading (FIXED)
 try:
     import MetaTrader5 as mt5
+    print("✅ Trading Operations using REAL MT5")
 except ImportError:
-    # Use mock MT5 for testing on non-Windows platforms
     import mt5_mock as mt5
+    print("⚠️ Trading Operations using mock - NOT for real trading!")
 
 
 def calculate_pip_value(symbol: str, lot_size: float) -> float:

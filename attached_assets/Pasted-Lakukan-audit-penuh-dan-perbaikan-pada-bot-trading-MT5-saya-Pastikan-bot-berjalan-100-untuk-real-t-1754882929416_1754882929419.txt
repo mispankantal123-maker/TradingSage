@@ -1,0 +1,91 @@
+Lakukan audit penuh dan perbaikan pada bot trading MT5 saya. Pastikan bot berjalan 100% untuk real trading dengan koneksi asli ke broker MT5 resmi di Windows, tanpa dummy server atau demo mode, dan semua fitur existing yang sudah work tetap dipertahankan.
+
+PERMASALAHAN YANG HARUS DIPERBAIKI:
+
+Error get_symbol_data() & Argumen bars
+
+Semua symbol gagal di-load karena error:
+
+bash
+Copy
+Edit
+get_symbol_data() got an unexpected keyword argument 'bars'
+Perbaikan:
+
+Audit semua pemanggilan get_symbol_data() di seluruh file.
+
+Sinkronkan parameter fungsi sesuai definisi yang benar (atau tambahkan parameter bars dengan default aman, misal bars=100).
+
+Pastikan fungsi ini bisa mengambil OHLCV / harga terbaru untuk semua symbol aktif di MT5.
+
+Dropdown Symbol Dummy
+
+Saat ini hanya menampilkan hardcode symbol (XAUUSD, BTCUSD).
+
+Perbaikan:
+
+Gunakan mt5.symbols_get() untuk mengisi dropdown dengan semua symbol aktif di akun.
+
+Tambahkan input manual symbol yang langsung validasi & ambil data dari MT5.
+
+Hilangkan semua dummy/hardcode symbol list.
+
+TP & SL Label Tertukar di GUI
+
+Label TP di GUI saat ini berfungsi sebagai SL dan sebaliknya.
+
+Perbaikan: Tukar label sesuai fungsi tanpa mengubah perhitungan order.
+
+Bot Berhenti Sendiri Tanpa Alasan Valid
+
+Sering muncul:
+
+vbnet
+Copy
+Edit
+🛑 Bot stopped via global flag - exiting trading loop
+Perbaikan:
+
+Hanya hentikan bot jika user menekan tombol stop atau ada error kritis.
+
+Pastikan koneksi ke MT5 putus → bot mencoba reconnect, bukan langsung stop.
+
+Gagal Ambil Data Akun (Cannot get account information)
+
+Perbaikan:
+
+Pastikan mt5.account_info() dipanggil hanya setelah koneksi valid.
+
+Jika gagal, lakukan retry otomatis sebelum risk check.
+
+Risk Management Check Gagal Akibat Data Tidak Valid
+
+Perbaikan:
+
+Jalankan risk check hanya jika data akun valid.
+
+Jika gagal ambil data → bot mencoba reconnect, bukan langsung pause trading.
+
+Strategi Tidak Berjalan Sesuai Pilihan User
+
+Intraday, Scalping, HF, Arbitrage belum terimplementasi penuh.
+
+Perbaikan:
+
+Pastikan hanya strategi yang dipilih user yang dijalankan.
+
+Semua strategi harus benar-benar mengeksekusi order sesuai logikanya.
+
+SYARAT TAMBAHAN WAJIB:
+
+Bot real trading dengan koneksi asli ke MT5 broker resmi, bukan dummy mode atau server simulasi.
+
+Semua strategi, order, TP/SL, dropdown, symbol, dan kalkulasi harus saling terintegrasi.
+
+Tidak mengubah sistem inti yang sudah berfungsi.
+
+Tidak boleh ada file dummy atau placeholder.
+
+Harus stabil dan tidak freeze / not responding saat running di Windows.
+
+Semua modul GUI & sistem harus bisa membaca data symbol dan akun secara real-time.

@@ -5,11 +5,16 @@ MT5 connection, initialization, and symbol management
 
 import platform
 import os
-
-# Use mock MT5 for Replit environment (non-Windows platform)
-import mt5_mock as mt5
 from typing import List, Optional, Dict, Any
 from logger_utils import logger
+
+# REAL MT5 Connection for Windows Trading (FIXED)
+try:
+    import MetaTrader5 as mt5
+    print("✅ Using REAL MetaTrader5 for Windows trading")
+except ImportError:
+    import mt5_mock as mt5 
+    print("⚠️ Using mt5_mock for development - NOT for real trading!")
 
 
 def connect_mt5() -> bool:

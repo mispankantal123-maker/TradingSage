@@ -9,10 +9,13 @@ from typing import Optional, Dict, Any, List
 from logger_utils import logger
 from config import DEFAULT_SYMBOLS
 
+# REAL MT5 for Windows Trading (FIXED)
 try:
     import MetaTrader5 as mt5
+    print("✅ Data Manager using REAL MT5 for Windows")
 except ImportError:
     import mt5_mock as mt5
+    print("⚠️ Data Manager using mock - NOT for real trading!")
 
 
 def get_currency_conversion_rate(from_currency: str, to_currency: str) -> float:

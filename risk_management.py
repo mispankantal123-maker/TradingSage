@@ -8,11 +8,13 @@ from typing import Dict, Any, Optional, Tuple
 from logger_utils import logger
 from config import MAX_RISK_PERCENTAGE, MAX_DAILY_TRADES, MAX_OPEN_POSITIONS
 
+# REAL MT5 for Windows Trading (FIXED)
 try:
     import MetaTrader5 as mt5
+    print("✅ Risk Management using REAL MT5")
 except ImportError:
-    # Use mock MT5 for testing on non-Windows platforms
     import mt5_mock as mt5
+    print("⚠️ Risk Management using mock - NOT for real trading!")
 
 
 # Global tracking variables

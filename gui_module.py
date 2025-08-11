@@ -114,8 +114,35 @@ class TradingBotGUI:
         self.strategy_combo.bind("<<ComboboxSelected>>", self.on_strategy_change)
         
         ttk.Label(params_frame, text="Symbol:").grid(row=0, column=2, sticky="w", padx=(0,3))
-        # Create editable symbol combo for manual input
-        self.symbol_combo = ttk.Combobox(params_frame, width=12)  # Remove state="readonly" to allow manual input
+        # REAL MT5 Symbol Loading (FIXED)
+        try:
+            try:
+                import MetaTrader5 as mt5
+            except ImportError:
+                import mt5_mock as mt5
+                
+            # Load REAL symbols from MT5
+            symbols = mt5.symbols_get()
+            if symbols and len(symbols) > 0:
+                symbol_names = []
+                for s in symbols[:100]:  # Top 100 symbols
+                    if hasattr(s, 'visible') and s.visible:
+                        symbol_names.append(s.name)
+                if len(symbol_names) == 0:
+                    symbol_names = [s.name for s in symbols[:50]]
+                self.log(f"✅ Loaded {len(symbol_names)} real symbols from MT5")
+            else:
+                symbol_names = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 
+                              'EURGBP', 'EURJPY', 'GBPJPY', 'XAUUSD', 'XAGUSD', 'BTCUSD', 'ETHUSD',
+                              'US30', 'US500', 'NAS100', 'WTI', 'BRENT', 'NATGAS']
+                self.log(f"⚠️ Using fallback - MT5 not connected ({len(symbol_names)} symbols)")
+        except Exception as e:
+            symbol_names = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD']
+            self.log(f"❌ Symbol load error: {str(e)}")
+            
+        # Create editable symbol combo for manual input  
+        self.symbol_combo = ttk.Combobox(params_frame, values=symbol_names, width=12)
+        self.symbol_combo.set("EURUSD")  # Default
         self.symbol_combo.grid(row=0, column=3, padx=(0, 5), sticky="ew")
         self.symbol_combo.bind("<<ComboboxSelected>>", self.on_symbol_change)
         self.symbol_combo.bind("<KeyRelease>", self.on_symbol_manual_input)
@@ -580,14 +607,21 @@ class TradingBotGUI:
                 
             # Test symbol data availability
             from data_manager import get_symbol_data
-            test_data = get_symbol_data(symbol, timeframe="M1", bars=10)
+            try:
+                import MetaTrader5 as mt5
+            except ImportError:
+                import mt5_mock as mt5
+            test_data = get_symbol_data(symbol, timeframe=mt5.TIMEFRAME_M1, count=10)
             
             if test_data is not None and len(test_data) > 0:
                 self.log(f"✅ Symbol {symbol} validated - data available")
                 
                 # Update symbol info display
                 try:
-                    import mt5_mock as mt5
+                    try:
+                        import MetaTrader5 as mt5
+                    except ImportError:
+                        import mt5_mock as mt5
                     symbol_info = mt5.symbol_info(symbol)
                     tick_info = mt5.symbol_info_tick(symbol)
                     
