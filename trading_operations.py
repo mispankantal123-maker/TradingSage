@@ -89,48 +89,69 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     return current_price * (1 + percentage / 100)  # SL above entry
                     
         elif unit.lower() in ["balance%", "balance_percent"]:
-            # Mode 3B: BALANCE PERCENTAGE - Based on account balance (CORRECTED)
+            # Mode 3B: BALANCE PERCENTAGE - COMPLETELY FIXED VERSION
             if not account_info:
                 logger(f"❌ Cannot get account info for balance% calculation")
                 return 0.0
+            
+            try:
+                balance = account_info.balance
+                percentage_amount = balance * (abs_value / 100)  # Amount in currency
                 
-            balance = account_info.balance
-            percentage_amount = balance * (abs_value / 100)  # Amount in currency
-            
-            logger(f"🔍 Balance% calculation: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f}")
-            
-            # Convert currency amount to price distance
-            symbol_info = mt5.symbol_info(symbol)
-            if not symbol_info:
-                logger(f"❌ Cannot get symbol info for {symbol}")
+                logger(f"🔍 Balance% calculation: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f}")
+                
+                # Get symbol info
+                symbol_info = mt5.symbol_info(symbol)
+                if not symbol_info:
+                    logger(f"❌ Cannot get symbol info for {symbol}")
+                    return 0.0
+                    
+                # CRITICAL FIX: Special handling for Gold (XAUUSDm)
+                if 'XAU' in symbol.upper():
+                    contract_size = 100    # Gold CFD = 100 oz (not 100000)
+                    point = 0.01          # Gold point = 0.01
+                    digits = 2            # Gold = 2 decimal places
+                else:
+                    contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
+                    point = getattr(symbol_info, 'point', 0.00001)
+                    digits = getattr(symbol_info, 'digits', 5)
+                
+                # Calculate pip value and distance
+                pip_value = lot_size * contract_size * point
+                if pip_value > 0:
+                    pip_distance = percentage_amount / pip_value
+                else:
+                    pip_distance = abs_value  # Fallback
+                
+                # CRITICAL: Apply reasonable limits to prevent extreme values
+                max_pips = 1000  # Maximum 1000 pips
+                min_pips = 1     # Minimum 1 pip
+                
+                if pip_distance > max_pips:
+                    logger(f"⚠️ Balance% calculated {pip_distance:.1f} pips - limiting to {max_pips} pips")
+                    pip_distance = max_pips
+                elif pip_distance < min_pips:
+                    logger(f"⚠️ Balance% calculated {pip_distance:.1f} pips - minimum {min_pips} pip applied")
+                    pip_distance = min_pips
+                    
+                logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
+                
+                # Calculate final price - FIXED variable reference
+                is_stop_loss = value < 0  # Negative value = Stop Loss
+                if is_stop_loss:
+                    if order_type.upper() == "BUY":
+                        return round(current_price - (pip_distance * point), digits)  # SL below entry
+                    else:  # SELL
+                        return round(current_price + (pip_distance * point), digits)  # SL above entry
+                else:  # Take Profit
+                    if order_type.upper() == "BUY":
+                        return round(current_price + (pip_distance * point), digits)  # TP above entry
+                    else:  # SELL
+                        return round(current_price - (pip_distance * point), digits)  # TP below entry
+                        
+            except Exception as e:
+                logger(f"❌ Error calculating TP/SL (balance%): {e}")
                 return 0.0
-                
-            # Get contract size and point value for proper conversion
-            contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
-            point = getattr(symbol_info, 'point', 0.00001)
-            digits = getattr(symbol_info, 'digits', 5)
-            
-            # Calculate price distance based on percentage amount
-            # For lot size calculation: percentage_amount / (contract_size * point)
-            pip_value = lot_size * contract_size * point
-            if pip_value > 0:
-                pip_distance = percentage_amount / pip_value
-            else:
-                pip_distance = abs_value  # Fallback to pip-based calculation
-                
-            logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
-            
-            # Calculate final price
-            if is_negative:
-                if order_type.upper() == "BUY":
-                    return round(current_price - (pip_distance * point), digits)  # SL below entry
-                else:  # SELL
-                    return round(current_price + (pip_distance * point), digits)  # SL above entry
-            else:
-                if order_type.upper() == "BUY":
-                    return round(current_price + (pip_distance * point), digits)  # TP above entry
-                else:  # SELL
-                    return round(current_price - (pip_distance * point), digits)  # TP below entry
             
 
             
@@ -166,7 +187,7 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
             
             # Calculate final price
-            if is_negative:
+            if is_sl:
                 if order_type.upper() == "BUY":
                     return round(current_price - (pip_distance * point), digits)  # SL below entry
                 else:  # SELL
