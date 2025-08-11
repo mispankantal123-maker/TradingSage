@@ -41,31 +41,38 @@ def bot_thread() -> None:
         # Main trading loop - FIXED stop mechanism
         while True:
             try:
-                # CRITICAL: Check bot_running flag at the beginning of each iteration
+                # Single bot running check per iteration
                 if not bot_running:
-                    logger("🛑 Bot stop signal received - exiting trading loop immediately")
+                    logger("🛑 Bot stopped")
                     break
 
-                # CRITICAL: Second stop check before time validation
-                if not bot_running:
-                    logger("🛑 Bot stopped during time check")
-                    break
+                # Risk management checks (non-blocking)
+                if not risk_management_check():
+                    logger("⚠️ Risk management warning - continuing with caution")
 
-                # Check if trading time is appropriate
-                if not check_trading_time():
-                    logger("⏰ Outside trading hours, waiting...")
-                    # Check stop signal during wait
-                    for wait_second in range(60):
-                        if not bot_running:
-                            logger("🛑 Bot stopped during trading hours wait")
-                            return
-                        time.sleep(1)
+                # Check daily limits
+                if not check_daily_limits():
+                    logger("📊 Daily trading limits reached - pausing for today")
+                    time.sleep(300)  # Wait 5 minutes then check again
                     continue
 
-                # CRITICAL: Third stop check before MT5 validation
-                if not bot_running:
-                    logger("🛑 Bot stopped during MT5 check")
-                    break
+                # Check trading session
+                if not check_trading_time():
+                    logger("⏰ Outside trading hours - waiting...")
+                    time.sleep(60)
+                    continue
+
+                # Get current strategy from GUI
+                try:
+                    import __main__
+                    if hasattr(__main__, 'gui') and __main__.gui:
+                        gui_strategy = __main__.gui.current_strategy
+                        if gui_strategy != current_strategy:
+                            current_strategy = gui_strategy
+                            logger(f"🔄 Strategy updated from GUI to: {current_strategy}")
+                except Exception as gui_e:
+                    logger(f"⚠️ GUI connection issue: {str(gui_e)}")
+                    current_strategy = "Scalping"
 
                 # Check MT5 connection status
                 if not check_mt5_status():
@@ -81,30 +88,6 @@ def bot_thread() -> None:
                             time.sleep(1)
                         continue
 
-                # Risk management check
-                if not risk_management_check():
-                    logger("🛡️ Risk management check failed, pausing trading...")
-                    time.sleep(300)  # Wait 5 minutes
-                    continue
-
-                # Get current strategy from GUI at start
-                try:
-                    import __main__
-                    if hasattr(__main__, 'gui') and __main__.gui:
-                        gui_strategy = __main__.gui.current_strategy
-                        if gui_strategy != current_strategy:
-                            current_strategy = gui_strategy
-                            logger(f"🔄 Strategy updated from GUI to: {current_strategy}")
-                except Exception as gui_e:
-                    logger(f"⚠️ GUI connection issue: {str(gui_e)}")
-                    # Fallback to default strategy if GUI not accessible
-                    current_strategy = "Scalping"
-
-                # CRITICAL: Fourth stop check before symbol processing
-                if not bot_running:
-                    logger("🛑 Bot stopped before symbol processing")
-                    break
-
                 # Get trading symbols
                 try:
                     import __main__
@@ -116,11 +99,6 @@ def bot_thread() -> None:
                     trading_symbols = DEFAULT_SYMBOLS[:3]
 
                 logger(f"📊 Analyzing {len(trading_symbols)} symbols with {current_strategy} strategy")
-
-                # CRITICAL: Fifth stop check before data retrieval
-                if not bot_running:
-                    logger("🛑 Bot stopped before data retrieval")
-                    break
 
                 # Get data for all symbols - FIXED parameter
                 symbol_data = get_multiple_symbols_data(trading_symbols, count=500)
@@ -135,22 +113,12 @@ def bot_thread() -> None:
 
                 for symbol, df in symbol_data.items():
                     try:
-                        # CRITICAL: Stop check at start of each symbol processing
-                        if not bot_running:
-                            logger(f"🛑 Bot stopped during {symbol} analysis")
-                            return
-
                         # Calculate indicators
                         df_with_indicators = calculate_indicators(df)
 
                         if df_with_indicators is None:
                             logger(f"⚠️ Indicator calculation failed for {symbol}")
                             continue
-
-                        # CRITICAL: Stop check before strategy execution
-                        if not bot_running:
-                            logger(f"🛑 Bot stopped before strategy execution for {symbol}")
-                            return
 
                         # Run strategy with current strategy from GUI
                         action, signals = run_strategy(current_strategy, df_with_indicators, symbol)

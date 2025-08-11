@@ -21,14 +21,7 @@ from indicators import calculate_support_resistance
 def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional[str], List[str]]:
     """Enhanced strategy execution with precise price analysis and validation"""
     try:
-        # CRITICAL: Check if bot is still running before analysis
-        try:
-            import __main__
-            if hasattr(__main__, 'bot_running') and not __main__.bot_running:
-                logger(f"🛑 Bot stopped - skipping strategy analysis for {symbol}")
-                return None, []
-        except:
-            pass
+        # Allow strategy analysis to proceed when called
 
         logger(f"🎯 Running {strategy} strategy for {symbol}")
 
