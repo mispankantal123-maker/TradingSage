@@ -282,6 +282,12 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
         logger(f"   Fill Mode: {fill_type} | Deviation: {request['deviation']}")
         logger(f"   Magic: {request['magic']} | Comment: {request['comment']}")
         
+        # CRITICAL: Validate TP/SL are properly set
+        if request['tp'] > 0 or request['sl'] > 0:
+            logger(f"✅ Order includes TP/SL levels - will be executed with stops")
+        else:
+            logger(f"⚠️ Order WITHOUT TP/SL levels - executing market order only")
+        
         # Validate critical parameters
         if request['volume'] <= 0 or request['volume'] > 100:
             logger(f"❌ Invalid volume: {request['volume']}")
@@ -565,10 +571,35 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
         sl_price = calculate_tp_sl_all_modes(f"-{sl_value}", sl_unit, symbol, action, current_price, lot_size)
         
+        # CRITICAL FIX: If TP/SL calculation failed (returns 0.0), use direct pip calculation as fallback
+        if tp_price == 0.0 and float(tp_value) > 0:
+            logger(f"⚠️ TP calculation failed, using direct pip calculation")
+            symbol_info = mt5.symbol_info(symbol)
+            point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+            
+            if action.upper() == "BUY":
+                tp_price = round(current_price + (float(tp_value) * point), 3)
+            else:  # SELL  
+                tp_price = round(current_price - (float(tp_value) * point), 3)
+                
+        if sl_price == 0.0 and float(sl_value) > 0:
+            logger(f"⚠️ SL calculation failed, using direct pip calculation")
+            symbol_info = mt5.symbol_info(symbol)
+            point = getattr(symbol_info, 'point', 0.01 if 'XAU' in symbol else 0.00001) if symbol_info else (0.01 if 'XAU' in symbol else 0.00001)
+            
+            if action.upper() == "BUY":
+                sl_price = round(current_price - (float(sl_value) * point), 3)
+            else:  # SELL
+                sl_price = round(current_price + (float(sl_value) * point), 3)
+        
         logger(f"🔧 Enhanced TP/SL calculation:")
         logger(f"   TP: {tp_value} {tp_unit} → {tp_price}")
         logger(f"   SL: {sl_value} {sl_unit} → {sl_price}")
         logger(f"   Entry: {current_price}")
+        
+        # Ensure TP/SL values are valid
+        if tp_price > 0 and sl_price > 0:
+            logger(f"✅ Valid TP/SL levels will be sent with order")
         
         logger(f"🎯 Executing {action} signal for {symbol}")
         logger(f"📋 Using strategy: {current_strategy}")

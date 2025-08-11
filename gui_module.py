@@ -185,13 +185,16 @@ class TradingBotGUI:
         positions_frame.grid(row=1, column=0, sticky="nsew")
         positions_frame.rowconfigure(0, weight=1)
         
-        # Positions treeview
-        columns = ("Symbol", "Type", "Volume", "Price", "Current", "Profit")
+        # Positions treeview with TP/SL columns
+        columns = ("Symbol", "Type", "Volume", "Price", "TP", "SL", "Current", "Profit")
         self.positions_tree = ttk.Treeview(positions_frame, columns=columns, show="headings", height=8)
         
         for col in columns:
             self.positions_tree.heading(col, text=col)
-            self.positions_tree.column(col, width=80, anchor="center")
+            if col in ["TP", "SL"]:
+                self.positions_tree.column(col, width=75, anchor="center")
+            else:
+                self.positions_tree.column(col, width=80, anchor="center")
         
         # Scrollbar for positions
         pos_scrollbar = ttk.Scrollbar(positions_frame, orient="vertical", command=self.positions_tree.yview)
