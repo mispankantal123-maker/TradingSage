@@ -91,16 +91,17 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     return current_price * (1 - percentage / 100)  # TP below entry for SELL
                     
         elif unit.lower() in ["balance%", "balance_percent"]:
-            # Mode 3B: BALANCE PERCENTAGE - COMPLETELY FIXED VERSION
+            # Mode 3B: BALANCE PERCENTAGE - CORRECTED FORMULA
             if not account_info:
                 logger(f"❌ Cannot get account info for balance% calculation")
                 return 0.0
             
             try:
                 balance = account_info.balance
-                percentage_amount = balance * (abs_value / 100)  # Amount in currency
+                # CORRECTED: (balance * percentage) / 100
+                percentage_amount = (balance * abs_value) / 100  # Fixed formula
                 
-                logger(f"🔍 Balance% calculation: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f}")
+                logger(f"🔍 Balance% calculation: ({balance:.2f} * {abs_value}) / 100 = ${percentage_amount:.2f}")
                 
                 # Get symbol info
                 symbol_info = mt5.symbol_info(symbol)
