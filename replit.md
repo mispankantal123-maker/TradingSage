@@ -185,6 +185,13 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Percentage Calculation Fixed**: Direct price percentage calculation (2% = 1.02x price)
 - ✅ **Enhanced Logging**: Shows GUI unit detection and override process in logs
 
+### CRITICAL STRATEGY BUY/SELL BALANCE FIX (January 2025)
+- ✅ **RSI Logic Fixed**: Changed from contrarian (RSI<35 buy) to trend-following (RSI 40-70 rising)
+- ✅ **Bollinger Bands Fixed**: Changed from contrarian to momentum-based trend continuation
+- ✅ **Signal Competition Fixed**: Balanced BUY vs SELL logic with proper tiebreaker handling
+- ✅ **Enhanced BUY Bias**: Double weight for EMA uptrend + additional strong uptrend condition
+- ✅ **Momentum Integration**: Price momentum properly integrated for signal generation
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5

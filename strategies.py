@@ -189,16 +189,21 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         
         # ENHANCED Scalping conditions - More sensitive signals
         
-        # EMA trend signals (more sensitive)
+        # ENHANCED EMA trend signals (more aggressive for BUY)
         if last['EMA8'] > last['EMA20']:
             if last['EMA8'] > prev['EMA8']:  # EMA8 trending up
                 signals.append("EMA8 above EMA20 and rising (Bullish trend)")
-                buy_signals += 1
+                buy_signals += 2  # More weight for uptrend
         
         if last['EMA8'] < last['EMA20']:
             if last['EMA8'] < prev['EMA8']:  # EMA8 trending down
                 signals.append("EMA8 below EMA20 and falling (Bearish trend)")
                 sell_signals += 1
+                
+        # ADDED: Additional BUY bias for trend continuation
+        if last['close'] > last['EMA8'] and last['EMA8'] > last['EMA20']:
+            signals.append("Price above EMA8, EMA8 above EMA20 (Strong uptrend)")
+            buy_signals += 1
         
         # Price momentum signals
         if last['close'] > prev['close']:
@@ -211,13 +216,13 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
                 signals.append("Negative price momentum accelerating")
                 sell_signals += 1
         
-        # RSI conditions (more lenient)
-        if last['RSI'] < 35:  # Slightly higher than 30 for more signals
-            signals.append("RSI in oversold territory")
+        # FIXED RSI conditions for trend following (not contrarian)
+        if 40 < last['RSI'] < 70 and last['RSI'] > prev['RSI']:  # RSI rising in trending zone
+            signals.append("RSI rising in bullish zone")
             buy_signals += 1
             
-        if last['RSI'] > 65:  # Slightly lower than 70 for more signals
-            signals.append("RSI in overbought territory")
+        if 30 < last['RSI'] < 60 and last['RSI'] < prev['RSI']:  # RSI falling in trending zone  
+            signals.append("RSI falling in bearish zone")
             sell_signals += 1
         
         # MACD signals (current state, not just crossovers)
@@ -231,29 +236,40 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
                 signals.append("MACD bearish with negative histogram")
                 sell_signals += 1
         
-        # Bollinger Bands - trend continuation
+        # FIXED Bollinger Bands - trend continuation (not contrarian)
         bb_width = last['BB_upper'] - last['BB_lower']
         bb_position = (last['close'] - last['BB_lower']) / bb_width
         
-        if bb_position > 0.7:  # Upper 30% of BB
-            signals.append("Price in upper Bollinger Band (Bullish)")
+        # BUY when price breaking above middle towards upper (momentum up)
+        if bb_position > 0.5 and last['close'] > prev['close']:  # Above middle and rising
+            signals.append("Price breaking above BB middle with momentum (Bullish)")
             buy_signals += 1
             
-        if bb_position < 0.3:  # Lower 30% of BB  
-            signals.append("Price in lower Bollinger Band (Bearish)")
+        # SELL when price breaking below middle towards lower (momentum down)  
+        if bb_position < 0.5 and last['close'] < prev['close']:  # Below middle and falling
+            signals.append("Price breaking below BB middle with momentum (Bearish)")
             sell_signals += 1
         
         # FIXED: Even more aggressive signal threshold for live market conditions
         signal_threshold = 1
         
-        # SPECIAL: Generate signal even with equal buy/sell if threshold met
+        # FIXED: More balanced signal competition logic
         action = None
-        if buy_signals >= signal_threshold and buy_signals >= sell_signals:
+        if buy_signals >= signal_threshold and buy_signals > sell_signals:
             action = "BUY"
             logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
         elif sell_signals >= signal_threshold and sell_signals > buy_signals:
             action = "SELL" 
             logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
+        # ADDED: Equal signals handling with trend bias
+        elif buy_signals == sell_signals and buy_signals >= signal_threshold:
+            # Use momentum as tiebreaker
+            if last['close'] > prev['close']:
+                action = "BUY"
+                logger(f"🟢 SCALPING BUY (Tiebreaker-Momentum) for {symbol}: Equal signals {buy_signals}, price rising")
+            else:
+                action = "SELL"
+                logger(f"🔴 SCALPING SELL (Tiebreaker-Momentum) for {symbol}: Equal signals {sell_signals}, price falling")
         else:
             # LAST RESORT: If no clear signals, generate based on price momentum
             if last['close'] > prev['close'] and last['close'] > df.iloc[-3]['close']:
