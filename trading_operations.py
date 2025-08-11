@@ -198,11 +198,24 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
             logger("💡 Check MT5 terminal connectivity and trading permissions")
             return False
             
-        # Handle both dict and object responses (for compatibility with mock)
-        retcode = getattr(result, 'retcode', result.get('retcode', 0)) if result else 0
+        # Handle both dict and object responses (Windows MT5 vs Mock compatibility)
+        if hasattr(result, 'retcode'):
+            # Real MT5 OrderSendResult object (Windows)
+            retcode = result.retcode
+        elif isinstance(result, dict):
+            # Mock dict response (development)
+            retcode = result.get('retcode', 0)
+        else:
+            retcode = 0
         
         if retcode != 10009:  # TRADE_RETCODE_DONE
-            comment = getattr(result, 'comment', result.get('comment', 'Unknown error'))
+            # Extract comment with compatibility
+            if hasattr(result, 'comment'):
+                comment = result.comment
+            elif isinstance(result, dict):
+                comment = result.get('comment', 'Unknown error')
+            else:
+                comment = 'Unknown error'
             logger(f"❌ Order failed: Code {retcode} - {comment}")
             
             # Enhanced error handling with specific error codes
@@ -230,11 +243,21 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
                 
             return False
         else:
-            # Extract values with compatibility for both dict and object
-            order = getattr(result, 'order', result.get('order', 0)) 
-            deal = getattr(result, 'deal', result.get('deal', 0))
-            volume = getattr(result, 'volume', result.get('volume', 0))
-            price = getattr(result, 'price', result.get('price', 0))
+            # Extract values with Windows MT5 compatibility
+            if hasattr(result, 'order'):
+                # Real MT5 OrderSendResult object
+                order = result.order
+                deal = result.deal
+                volume = result.volume
+                price = result.price
+            elif isinstance(result, dict):
+                # Mock dict response
+                order = result.get('order', 0)
+                deal = result.get('deal', 0)
+                volume = result.get('volume', 0)
+                price = result.get('price', 0)
+            else:
+                order = deal = volume = price = 0
             
             logger(f"✅ ORDER EXECUTED SUCCESSFULLY!")
             logger(f"   Order: #{order}")
@@ -257,11 +280,11 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
                 'symbol': symbol,
                 'action': action,
                 'volume': lot_size,
-                'price': result.price,
+                'price': price,
                 'tp': tp_price if tp_price > 0 else 0,
                 'sl': sl_price if sl_price > 0 else 0,
                 'comment': comment,
-                'ticket': result.order,
+                'ticket': order,
                 'profit': 0.0
             }
             
