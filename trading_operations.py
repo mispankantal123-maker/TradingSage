@@ -198,39 +198,49 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
             logger("💡 Check MT5 terminal connectivity and trading permissions")
             return False
             
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logger(f"❌ Order failed: Code {result.retcode} - {result.comment}")
+        # Handle both dict and object responses (for compatibility with mock)
+        retcode = getattr(result, 'retcode', result.get('retcode', 0)) if result else 0
+        
+        if retcode != 10009:  # TRADE_RETCODE_DONE
+            comment = getattr(result, 'comment', result.get('comment', 'Unknown error'))
+            logger(f"❌ Order failed: Code {retcode} - {comment}")
             
             # Enhanced error handling with specific error codes
-            if result.retcode == 10004:  # TRADE_RETCODE_REQUOTE
+            if retcode == 10004:  # TRADE_RETCODE_REQUOTE
                 logger("💡 Price requote - retrying with current market price...")
                 return False  # Could retry with new price
-            elif result.retcode == 10006:  # TRADE_RETCODE_REJECT
+            elif retcode == 10006:  # TRADE_RETCODE_REJECT
                 logger("💡 Order rejected - check trading conditions")
-            elif result.retcode == 10007:  # TRADE_RETCODE_CANCEL
+            elif retcode == 10007:  # TRADE_RETCODE_CANCEL
                 logger("💡 Order cancelled by user or timeout")
-            elif result.retcode == 10008:  # TRADE_RETCODE_PLACED
+            elif retcode == 10008:  # TRADE_RETCODE_PLACED
                 logger("💡 Order placed but not executed yet")
-            elif result.retcode == 10009:  # TRADE_RETCODE_DONE
+            elif retcode == 10009:  # TRADE_RETCODE_DONE
                 logger("✅ Order executed successfully (unexpected path)")
-            elif result.retcode == 10013:  # TRADE_RETCODE_INVALID_VOLUME
+            elif retcode == 10013:  # TRADE_RETCODE_INVALID_VOLUME
                 logger("💡 Invalid volume - check lot size settings")
-            elif result.retcode == 10018:  # TRADE_RETCODE_MARKET_CLOSED
+            elif retcode == 10018:  # TRADE_RETCODE_MARKET_CLOSED
                 logger("💡 Market is closed - check trading session")
-            elif result.retcode == 10019:  # TRADE_RETCODE_NO_MONEY
+            elif retcode == 10019:  # TRADE_RETCODE_NO_MONEY
                 logger("💡 Insufficient funds - reduce lot size")
-            elif result.retcode == 10020:  # TRADE_RETCODE_PRICE_CHANGED
+            elif retcode == 10020:  # TRADE_RETCODE_PRICE_CHANGED
                 logger("💡 Price changed during execution - retry")
             else:
-                logger(f"💡 Unknown error code: {result.retcode}")
+                logger(f"💡 Unknown error code: {retcode}")
                 
             return False
         else:
+            # Extract values with compatibility for both dict and object
+            order = getattr(result, 'order', result.get('order', 0)) 
+            deal = getattr(result, 'deal', result.get('deal', 0))
+            volume = getattr(result, 'volume', result.get('volume', 0))
+            price = getattr(result, 'price', result.get('price', 0))
+            
             logger(f"✅ ORDER EXECUTED SUCCESSFULLY!")
-            logger(f"   Order: #{result.order}")
-            logger(f"   Deal: #{result.deal}")
-            logger(f"   Volume: {result.volume}")
-            logger(f"   Price: {result.price}")
+            logger(f"   Order: #{order}")
+            logger(f"   Deal: #{deal}")
+            logger(f"   Volume: {volume}")
+            logger(f"   Price: {price}")
             
             # Update GUI immediately if available
             try:
@@ -240,9 +250,6 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
                     __main__.gui.update_positions()
             except:
                 pass
-            logger(f"   Deal: #{result.deal}")
-            logger(f"   Volume: {result.volume}")
-            logger(f"   Price: {result.price}")
             
             # Log to CSV
             order_data = {

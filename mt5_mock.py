@@ -298,3 +298,9 @@ TRADE_ACTION_REMOVE = 8
 ORDER_FILLING_FOK = 0
 ORDER_FILLING_IOC = 1
 ORDER_FILLING_RETURN = 2
+
+# Order time types - CRITICAL FIX: These were missing!
+ORDER_TIME_GTC = 0  # Good Till Cancelled
+ORDER_TIME_DAY = 1  # Good for Day
+ORDER_TIME_SPECIFIED = 2  # Good Till Specified Time
+ORDER_TIME_SPECIFIED_DAY = 3  # Good Till Specified Day

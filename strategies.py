@@ -76,16 +76,16 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
         price_change_pips = abs(price_change) / point
         logger(f"   📊 Price Movement: {price_change:+.{digits}f} ({price_change_pips:.1f} pips)")
         
-        # Enhanced spread quality check
+        # FIXED: More lenient spread handling for precious metals
         if any(precious in symbol for precious in ["XAU", "XAG", "GOLD", "SILVER"]):
             symbol_info = mt5.symbol_info(symbol)
             if symbol_info:
                 point_value = getattr(symbol_info, 'point', 0.01)
                 spread_pips = current_spread / point_value
-                max_allowed_spread = 100.0  # More realistic for gold
+                max_allowed_spread = 300.0  # INCREASED from 100 to 300 for gold
             else:
-                spread_pips = current_spread / 0.01  # Assume 0.01 point for gold
-                max_allowed_spread = 100.0
+                spread_pips = current_spread / 0.01
+                max_allowed_spread = 300.0  # INCREASED limit for gold
         elif "JPY" in symbol:
             spread_pips = current_spread / 0.01
             max_allowed_spread = 8.0  # JPY pairs
@@ -96,12 +96,15 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
         spread_quality = "EXCELLENT" if spread_pips < max_allowed_spread * 0.3 else "GOOD" if spread_pips < max_allowed_spread * 0.6 else "FAIR" if spread_pips < max_allowed_spread * 0.8 else "POOR"
         logger(f"   🎯 Spread Analysis: {spread_pips:.1f} pips ({spread_quality}) | Max: {max_allowed_spread}")
         
-        # More lenient spread filtering - only skip if extremely wide
+        # FIXED: More lenient spread filtering for live trading
         if spread_pips > max_allowed_spread:
-            logger(f"⚠️ Spread too wide ({spread_pips:.1f} pips > {max_allowed_spread}) - reducing targets")
+            logger(f"⚠️ Spread wide ({spread_pips:.1f} pips > {max_allowed_spread}) but continuing with adjusted targets")
             spread_warning = True
         else:
             spread_warning = False
+            
+        # Don't skip trading due to spread - just adjust parameters
+        logger(f"   📊 Trading continues despite spread conditions")
         
         # Route to specific strategy
         if strategy == "Scalping":
@@ -139,55 +142,85 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         current_ask = round(current_tick.ask, digits)
         current_price = round((current_bid + current_ask) / 2, digits)
         
-        # Scalping conditions - Fast EMA crossovers
-        if last['EMA8'] > last['EMA20'] and prev['EMA8'] <= prev['EMA20']:
-            signals.append("EMA8 crossed above EMA20 (Bullish)")
+        # ENHANCED Scalping conditions - More sensitive signals
+        
+        # EMA trend signals (more sensitive)
+        if last['EMA8'] > last['EMA20']:
+            if last['EMA8'] > prev['EMA8']:  # EMA8 trending up
+                signals.append("EMA8 above EMA20 and rising (Bullish trend)")
+                buy_signals += 1
+        
+        if last['EMA8'] < last['EMA20']:
+            if last['EMA8'] < prev['EMA8']:  # EMA8 trending down
+                signals.append("EMA8 below EMA20 and falling (Bearish trend)")
+                sell_signals += 1
+        
+        # Price momentum signals
+        if last['close'] > prev['close']:
+            if (last['close'] - prev['close']) > (prev['close'] - df.iloc[-3]['close']):
+                signals.append("Positive price momentum accelerating")
+                buy_signals += 1
+        
+        if last['close'] < prev['close']:
+            if (prev['close'] - last['close']) > (df.iloc[-3]['close'] - prev['close']):
+                signals.append("Negative price momentum accelerating")
+                sell_signals += 1
+        
+        # RSI conditions (more lenient)
+        if last['RSI'] < 35:  # Slightly higher than 30 for more signals
+            signals.append("RSI in oversold territory")
             buy_signals += 1
             
-        if last['EMA8'] < last['EMA20'] and prev['EMA8'] >= prev['EMA20']:
-            signals.append("EMA8 crossed below EMA20 (Bearish)")
+        if last['RSI'] > 65:  # Slightly lower than 70 for more signals
+            signals.append("RSI in overbought territory")
             sell_signals += 1
         
-        # RSI conditions for scalping
-        if last['RSI'] < 30 and last['RSI'] > prev['RSI']:
-            signals.append("RSI oversold and recovering")
+        # MACD signals (current state, not just crossovers)
+        if last['MACD'] > last['MACD_signal']:
+            if last['MACD_histogram'] > 0:
+                signals.append("MACD bullish with positive histogram")
+                buy_signals += 1
+            
+        if last['MACD'] < last['MACD_signal']:
+            if last['MACD_histogram'] < 0:
+                signals.append("MACD bearish with negative histogram")
+                sell_signals += 1
+        
+        # Bollinger Bands - trend continuation
+        bb_width = last['BB_upper'] - last['BB_lower']
+        bb_position = (last['close'] - last['BB_lower']) / bb_width
+        
+        if bb_position > 0.7:  # Upper 30% of BB
+            signals.append("Price in upper Bollinger Band (Bullish)")
             buy_signals += 1
             
-        if last['RSI'] > 70 and last['RSI'] < prev['RSI']:
-            signals.append("RSI overbought and declining")
+        if bb_position < 0.3:  # Lower 30% of BB  
+            signals.append("Price in lower Bollinger Band (Bearish)")
             sell_signals += 1
         
-        # MACD quick signals
-        if last['MACD'] > last['MACD_signal'] and prev['MACD'] <= prev['MACD_signal']:
-            signals.append("MACD bullish crossover")
-            buy_signals += 1
-            
-        if last['MACD'] < last['MACD_signal'] and prev['MACD'] >= prev['MACD_signal']:
-            signals.append("MACD bearish crossover")
-            sell_signals += 1
+        # FIXED: Even more aggressive signal threshold for live market conditions
+        signal_threshold = 1
         
-        # Price action - quick reversals
-        if last['close'] > last['BB_upper'] and prev['close'] <= prev['BB_upper']:
-            signals.append("Price broke above Bollinger Upper")
-            buy_signals += 1
-            
-        if last['close'] < last['BB_lower'] and prev['close'] >= prev['BB_lower']:
-            signals.append("Price broke below Bollinger Lower")
-            sell_signals += 1
-        
-        # FIXED: Lower signal threshold for more aggressive scalping entries
-        signal_threshold = 1  # Reduced from 2 to 1 for faster signals
-        
-        # Determine action
+        # SPECIAL: Generate signal even with equal buy/sell if threshold met
         action = None
-        if buy_signals >= signal_threshold and buy_signals > sell_signals:
+        if buy_signals >= signal_threshold and buy_signals >= sell_signals:
             action = "BUY"
             logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
         elif sell_signals >= signal_threshold and sell_signals > buy_signals:
             action = "SELL" 
             logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
         else:
-            logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell (need {signal_threshold}+ dominant)")
+            # LAST RESORT: If no clear signals, generate based on price momentum
+            if last['close'] > prev['close'] and last['close'] > df.iloc[-3]['close']:
+                signals.append("Backup signal: Recent price momentum upward")
+                action = "BUY"
+                logger(f"🟢 SCALPING BUY (Momentum) for {symbol}: Price rising trend")
+            elif last['close'] < prev['close'] and last['close'] < df.iloc[-3]['close']:
+                signals.append("Backup signal: Recent price momentum downward")
+                action = "SELL"
+                logger(f"🔴 SCALPING SELL (Momentum) for {symbol}: Price falling trend")
+            else:
+                logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell")
         
         return action, signals
         
