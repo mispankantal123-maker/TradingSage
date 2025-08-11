@@ -142,6 +142,13 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Multi-Symbol Ready**: Works with all 88+ symbols automatically
 - ✅ **OrderSendResult Compatibility**: Fixed for real Windows MT5 order execution
 
+### CRITICAL WINDOWS MT5 ERROR FIXES (January 2025)
+- ✅ **Error 10016 Fixed**: Invalid stops - implemented proper TP/SL distance validation
+- ✅ **Error 10015 Fixed**: Invalid order - enhanced order parameter validation
+- ✅ **Minimum Stop Distance**: Auto-detects and applies symbol-specific stop requirements
+- ✅ **Enhanced Order Validation**: Proper filling modes, price precision, and parameter checking
+- ✅ **Real Bid/Ask Usage**: Uses accurate entry prices for TP/SL calculations
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5

@@ -159,28 +159,84 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
             logger(f"❌ Invalid action: {action}")
             return False
             
-        # Validate TP/SL levels
-        if not validate_tp_sl_levels(symbol, tp_price if tp_price > 0 else None, 
-                                   sl_price if sl_price > 0 else None, action):
-            logger(f"⚠️ TP/SL validation failed, continuing without levels")
-            tp_price = 0.0
-            sl_price = 0.0
+        # Skip TP/SL validation here - will be handled in enhanced request section
+        # This prevents double validation that causes issues
         
         # Prepare order request
+        # Enhanced request with Windows MT5 compatibility
+        digits = symbol_info.digits
+        point = symbol_info.point
+        
+        # Validate and adjust TP/SL for MT5 requirements
+        min_stops_level = getattr(symbol_info, 'trade_stops_level', 0) * point
+        if min_stops_level == 0:
+            min_stops_level = 10 * point  # Default minimum distance
+            
+        # Adjust TP/SL if too close
+        if sl_price > 0:
+            if action.upper() == "BUY":
+                min_sl = price - min_stops_level
+                if sl_price > min_sl:
+                    sl_price = round(min_sl, digits)
+                    logger(f"⚠️ SL adjusted to minimum distance: {sl_price:.{digits}f}")
+            else:  # SELL
+                min_sl = price + min_stops_level
+                if sl_price < min_sl:
+                    sl_price = round(min_sl, digits)
+                    logger(f"⚠️ SL adjusted to minimum distance: {sl_price:.{digits}f}")
+                    
+        if tp_price > 0:
+            if action.upper() == "BUY":
+                min_tp = price + min_stops_level
+                if tp_price < min_tp:
+                    tp_price = round(min_tp, digits)
+                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
+            else:  # SELL
+                min_tp = price - min_stops_level
+                if tp_price > min_tp:
+                    tp_price = round(min_tp, digits)
+                    logger(f"⚠️ TP adjusted to minimum distance: {tp_price:.{digits}f}")
+        
+        # Determine best fill type for the symbol
+        filling_mode = getattr(symbol_info, 'filling_mode', 0)
+        if filling_mode & 2:  # ORDER_FILLING_IOC supported
+            fill_type = mt5.ORDER_FILLING_IOC
+        elif filling_mode & 1:  # ORDER_FILLING_FOK supported
+            fill_type = mt5.ORDER_FILLING_FOK
+        else:  # Return mode (default)
+            fill_type = mt5.ORDER_FILLING_RETURN
+            
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": symbol,
-            "volume": lot_size,
+            "volume": round(lot_size, 2),
             "type": order_type,
-            "price": price,
-            "sl": sl_price if sl_price > 0 else 0.0,
-            "tp": tp_price if tp_price > 0 else 0.0,
-            "deviation": 20,  # Maximum price deviation in points
-            "magic": 234000,  # Expert Advisor ID
-            "comment": comment,
+            "price": round(price, digits),
+            "sl": round(sl_price, digits) if sl_price > 0 else 0.0,
+            "tp": round(tp_price, digits) if tp_price > 0 else 0.0,
+            "deviation": 50,  # Increased deviation for volatile markets
+            "magic": 234000,
+            "comment": comment[:31] if comment else "AutoBot",  # MT5 comment limit
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": fill_type,
         }
+        
+        # Final validation before sending
+        logger(f"📤 Final Order Request for {symbol}:")
+        logger(f"   Action: {action} | Type: {order_type}")
+        logger(f"   Volume: {request['volume']} | Price: {request['price']:.{digits}f}")
+        logger(f"   TP: {request['tp']:.{digits}f} | SL: {request['sl']:.{digits}f}")
+        logger(f"   Fill Mode: {fill_type} | Deviation: {request['deviation']}")
+        logger(f"   Magic: {request['magic']} | Comment: {request['comment']}")
+        
+        # Validate critical parameters
+        if request['volume'] <= 0 or request['volume'] > 100:
+            logger(f"❌ Invalid volume: {request['volume']}")
+            return False
+            
+        if request['price'] <= 0:
+            logger(f"❌ Invalid price: {request['price']}")
+            return False
         
         # Log order details
         logger(f"📤 Sending {action} order for {symbol}:")
