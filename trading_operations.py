@@ -169,6 +169,22 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     
                 logger(f"🔧 Converting ${percentage_amount:.2f} to {pip_distance:.1f} pips for {symbol}")
                 
+                # CRITICAL FIX: Apply minimum distances for Bitcoin and other assets
+                symbol_upper = symbol.upper()
+                if 'BTC' in symbol_upper:
+                    min_pips = 50  # Bitcoin minimum 50 pips
+                elif 'ETH' in symbol_upper:
+                    min_pips = 30  # Ethereum minimum 30 pips
+                elif 'XAU' in symbol_upper:
+                    min_pips = 100  # Gold minimum 100 pips
+                else:
+                    min_pips = 10  # Default minimum
+                
+                # Ensure pip_distance meets minimum requirements
+                if pip_distance < min_pips:
+                    logger(f"⚠️ Balance% calculated {pip_distance:.1f} pips - enforcing {min_pips} pips minimum for {symbol}")
+                    pip_distance = min_pips
+                
                 # Calculate final price - FIXED variable reference
                 is_stop_loss = value < 0  # Negative value = Stop Loss
                 if is_stop_loss:

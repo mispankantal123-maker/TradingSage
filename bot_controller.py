@@ -38,9 +38,16 @@ def bot_thread() -> None:
         # Reset daily counters
         check_daily_limits()
         
-        # Main trading loop
+        # Main trading loop - Enhanced with stop checks
         while bot_running:
             try:
+                # CRITICAL: Check global bot_running at start of every loop
+                import __main__
+                if not getattr(__main__, 'bot_running', True):
+                    logger("🛑 Bot stopped via global flag - exiting trading loop")
+                    bot_running = False
+                    break
+                
                 # Check if trading time is appropriate
                 if not check_trading_time():
                     logger("⏰ Outside trading hours, waiting...")
