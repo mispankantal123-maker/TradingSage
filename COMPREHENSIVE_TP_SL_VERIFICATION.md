@@ -1,158 +1,98 @@
-# COMPREHENSIVE TP/SL SYSTEM VERIFICATION
+# COMPREHENSIVE TP/SL ALL MODES IMPLEMENTATION
 
-## 🔍 **SYSTEM ANALYSIS STATUS - PRE-REAL ACCOUNT TESTING**
+## ✅ **IMPLEMENTED FEATURES**
 
-### **1. Balance% Calculation - FIXED ✅**
+### **1. Complete Dropdown Support**
+- **pips**: Standard pip-based calculation ✅
+- **price**: Direct price level entry ✅  
+- **percent**: Entry price percentage ✅
+- **balance%**: Account balance percentage ✅
+- **equity%**: Account equity percentage ✅
+- **money**: Fixed currency amount ✅
 
-**Problem Found**: TP: 2.0 balance% → 13357.51 (extreme value for entry 3379.34)
+### **2. Enhanced GUI Callbacks**
 
-**Root Cause**: Incorrect currency-to-pip conversion formula
-```python
-# OLD (Wrong):
-percentage_amount = balance * (abs_value / 100)  # $10000 * 2% = $200
-# Then direct price calculation = entry + $200 = 3379.34 + 200 = 3579.34 ❌
-
-# NEW (Fixed):
-pip_value = lot_size * contract_size * point  # 0.01 * 100000 * 0.01 = $10 per pip
-pip_distance = percentage_amount / pip_value  # $200 / $10 = 20 pips
-final_price = current_price + (pip_distance * point)  # 3379.34 + (20 * 0.01) = 3381.34 ✅
+**Take Profit (TP) Modes:**
+```
+pips     → Default: 20, Range: 5-100 pips
+price    → Direct price level (0.0 placeholder) 
+percent  → Default: 1.0%, Range: 0.1-5%
+balance% → Default: 2.0%, Range: 0.1-10%
+equity%  → Default: 2.0%, Range: 0.1-10%
+money    → Default: $100, Range: varies
 ```
 
-**Expected Result**: 2% balance ($200) = ~20 pips = realistic TP/SL values
-
-### **2. XAUUSDm Error 10016 Prevention - ENHANCED ✅**
-
-**Gold-Specific Handling**:
-```python
-if 'XAU' in symbol.upper():
-    point = 0.01              # Gold point value  
-    digits = 2                # Gold decimal places
-    min_distance_pips = 100   # Gold minimum (not 10 pips)
+**Stop Loss (SL) Modes:**
+```
+pips     → Default: 10, Range: 3-50 pips
+price    → Direct price level (0.0 placeholder)
+percent  → Default: 0.5%, Range: 0.1-3%
+balance% → Default: 1.0%, Range: 0.1-5%
+equity%  → Default: 1.0%, Range: 0.1-5%
+money    → Default: $50, Range: varies
 ```
 
-**Multi-Layer Validation**:
-- Distance validation (minimum 100 pips for Gold)
-- Direction validation (BUY TP > entry, SL < entry)
-- Emergency fallback with safe distances
+### **3. Real-Time Unit Selection**
+- `get_tp_unit()` dan `get_sl_unit()` now read from dropdown
+- No longer hardcoded to strategy defaults
+- User selection takes priority over config
 
-### **3. Strategy BUY/SELL Balance - REBALANCED ✅**
+### **4. Smart Default Values**
+Setiap mode memiliki default value yang reasonable:
+- Conservative untuk percentage modes
+- Standard values untuk pip modes  
+- Placeholder untuk price modes
+- Moderate amounts untuk money modes
 
-**Signal Distribution**:
-- **BUY Opportunities**: EMA uptrend (+2), price momentum (+2), RSI bullish (+1), MACD (+2), BB (+2) = Max 9 points
-- **SELL Opportunities**: EMA downtrend (+2), price momentum (+2), RSI bearish (+1), MACD (+2), BB (+2) = Max 9 points
-- **Equal Weight System**: Both BUY and SELL can achieve maximum score
+## 📊 **USAGE EXAMPLES**
 
-**Tiebreaker Logic**: Price momentum as final decision maker
+### **Scalping Strategy:**
+- TP: 15 pips / 0.8% / 1.5 balance% / $75
+- SL: 8 pips / 0.4% / 0.8 balance% / $40
 
-### **4. GUI Unit Integration - VERIFIED ✅**
+### **Intraday Strategy:**  
+- TP: 40 pips / 2.0% / 3.0 balance% / $200
+- SL: 20 pips / 1.0% / 1.5 balance% / $100
 
-**Unit Mapping System**:
-```python
-unit_mapping = {
-    "pips": "pips",
-    "price": "price", 
-    "percent": "percent",
-    "percent (balance)": "balance%",   # GUI display → internal
-    "percent (equity)": "equity%",     # GUI display → internal
-    "money": "money"
-}
-```
+### **Arbitrage Strategy:**
+- TP: 10 pips / 0.5% / 1.0 balance% / $50
+- SL: 5 pips / 0.3% / 0.5 balance% / $25
 
-**GUI Override Logic**: GUI settings ALWAYS override strategy defaults
+### **HFT Strategy:**
+- TP: 5 pips / 0.3% / 0.8 balance% / $30
+- SL: 3 pips / 0.2% / 0.4 balance% / $20
 
-### **5. All TP/SL Calculation Modes - COMPREHENSIVE ✅**
+## 🔧 **TECHNICAL IMPLEMENTATION**
 
-#### **Mode 1: Pips**
-```
-Input: 20 pips
-Calculation: current_price ± (20 * point * multiplier)
-Result: Realistic pip-based distance
-```
+**Backend Support:**
+- `calculate_tp_sl_all_modes()` function supports all 6 modes
+- Asset-specific minimum distance enforcement
+- Universal symbol compatibility (50+ assets)
 
-#### **Mode 2: Price** 
-```
-Input: 1.10500
-Calculation: Direct price target
-Result: Exact price level
-```
+**GUI Integration:**
+- Real-time unit selection via dropdowns
+- Smart default value suggestions
+- Comprehensive user guidance in logs
+- Input validation and range checking
 
-#### **Mode 3A: Percent (Price-based)**
-```
-Input: 2%
-Calculation: current_price * (1 ± 0.02)
-Result: 2% price movement
-```
+**Error Handling:**
+- Invalid unit fallback to "pips"
+- Out-of-range value correction
+- Exception logging and recovery
 
-#### **Mode 3B: Balance% (FIXED)**
-```
-Input: 2% balance
-Calculation: ($10000 * 0.02) / pip_value = pips → price
-Result: Risk-based TP/SL
-```
+## 🎯 **USER EXPERIENCE**
 
-#### **Mode 4: Money**
-```
-Input: $100
-Calculation: $100 / pip_value = pips → price
-Result: Dollar-amount based TP/SL
-```
+**Workflow:**
+1. User selects strategy (Scalping/Intraday/etc)
+2. User chooses TP unit from dropdown (pips/price/percent/balance%/equity%/money)
+3. User enters value for chosen unit
+4. System provides guidance and validates input
+5. Bot calculates exact TP/SL prices using selected mode
 
-### **6. MT5 Integration - PRODUCTION READY ✅**
+**Benefits:**
+- Complete flexibility in TP/SL calculation methods
+- Asset-appropriate defaults and ranges
+- Clear guidance and validation
+- Professional trading platform experience
 
-**Real MT5 Data Usage**:
-- `symbol_info()` for accurate point values
-- `trade_stops_level` for minimum distances
-- `account_info()` for balance/equity calculations
-- `OrderSendResult` compatibility for Windows MT5
-
-### **7. Telegram Integration - ACTIVE ✅**
-
-**Notification Coverage**:
-- Trade execution (BUY/SELL with TP/SL details)
-- Position management (close notifications)
-- Account monitoring (balance, equity updates)
-- Error notifications (Error 10016 prevention)
-- Strategy changes and bot status
-
-### **8. Session Management - 24/7 ENABLED ✅**
-
-**Trading Sessions**:
-- All sessions active (Sydney, Tokyo, London, New York)
-- Weekend trading enabled for crypto/metals
-- No time-based trading blocks
-
-## 🎯 **FINAL VERIFICATION CHECKLIST**
-
-✅ **Balance% Calculation**: Fixed extreme value bug  
-✅ **Error 10016 Prevention**: XAUUSDm minimum distances implemented  
-✅ **BUY/SELL Balance**: Strategy algorithms rebalanced  
-✅ **GUI Integration**: Unit mappings verified  
-✅ **TP/SL Modes**: All 4 modes working properly  
-✅ **MT5 Compatibility**: Windows MT5 ready  
-✅ **Telegram Alerts**: Real-time notifications active  
-✅ **24/7 Trading**: No time restrictions  
-
-## 📊 **EXPECTED REAL ACCOUNT BEHAVIOR**
-
-### **Order Execution**:
-```
-Balance: $10,000
-TP: 2% balance = $200 = ~20 pips = realistic TP level
-SL: 1% balance = $100 = ~10 pips = realistic SL level
-✅ Order executed successfully (no Error 10016)
-```
-
-### **Signal Generation**:
-```
-Market Conditions → BUY/SELL signals balanced
-Uptrend: More BUY signals (EMA + momentum bias)
-Downtrend: More SELL signals (EMA + momentum bias)
-Sideways: Mixed signals (50/50 distribution)
-```
-
-### **Symbol Support**:
-- **EURUSD, GBPUSD**: 10 pips minimum, standard calculation
-- **XAUUSDm, XAUUSD**: 100 pips minimum, Gold-specific handling
-- **USDJPY, EURJPY**: 20 pips minimum, JPY-specific calculation
-
-**SYSTEM IS PRODUCTION-READY FOR REAL ACCOUNT TESTING** ✅
+**Status: ALL TP/SL MODES FULLY IMPLEMENTED** 🚀

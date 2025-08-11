@@ -456,31 +456,91 @@ class TradingBotGUI:
             self.log(f"❌ Error changing strategy: {str(e)}")
     
     def on_tp_unit_change(self, event=None):
-        """Handle TP unit change to show percentage info"""
+        """Handle TP unit change - Enhanced for all modes"""
         try:
             unit = self.tp_unit_combo.get()
-            if unit in ["balance%", "equity%"]:
-                current_value = self.tp_entry.get()
+            current_value = self.tp_entry.get()
+            
+            # Provide guidance and default values for each mode
+            if unit == "pips":
+                if not current_value or float(current_value) > 100:
+                    self.tp_entry.delete(0, tk.END)
+                    self.tp_entry.insert(0, "20")
+                self.log(f"💡 TP unit changed to {unit} - Standard pip calculation")
+                self.log(f"💡 Recommended range: 5-100 pips (asset dependent)")
+                
+            elif unit == "price":
+                if not current_value:
+                    self.tp_entry.delete(0, tk.END)
+                    self.tp_entry.insert(0, "0.0")
+                self.log(f"💡 TP unit changed to {unit} - Direct price level")
+                self.log(f"💡 Enter exact price level for Take Profit")
+                
+            elif unit == "percent":
+                if not current_value or float(current_value) > 5:
+                    self.tp_entry.delete(0, tk.END)
+                    self.tp_entry.insert(0, "1.0")
+                self.log(f"💡 TP unit changed to {unit} - Entry price percentage")
+                self.log(f"💡 Recommended range: 0.1% - 5% from entry price")
+                
+            elif unit in ["balance%", "equity%"]:
                 if not current_value or float(current_value) > 10.0:
                     self.tp_entry.delete(0, tk.END)
-                    self.tp_entry.insert(0, "2.0")  # Default 2%
-                self.log(f"💡 TP unit changed to {unit} - Value represents percentage")
+                    self.tp_entry.insert(0, "2.0")
+                self.log(f"💡 TP unit changed to {unit} - Account percentage")
                 self.log(f"💡 Recommended range: 0.1% - 10% of {unit.split('%')[0]}")
+                
+            elif unit == "money":
+                if not current_value or float(current_value) > 1000:
+                    self.tp_entry.delete(0, tk.END)
+                    self.tp_entry.insert(0, "100")
+                self.log(f"💡 TP unit changed to {unit} - Fixed currency amount")
+                self.log(f"💡 Enter amount in account currency (e.g. $100)")
             
         except Exception as e:
             self.log(f"❌ Error changing TP unit: {str(e)}")
     
     def on_sl_unit_change(self, event=None):
-        """Handle SL unit change to show percentage info"""
+        """Handle SL unit change - Enhanced for all modes"""
         try:
             unit = self.sl_unit_combo.get()
-            if unit in ["balance%", "equity%"]:
-                current_value = self.sl_entry.get()
+            current_value = self.sl_entry.get()
+            
+            # Provide guidance and default values for each mode
+            if unit == "pips":
+                if not current_value or float(current_value) > 100:
+                    self.sl_entry.delete(0, tk.END)
+                    self.sl_entry.insert(0, "10")
+                self.log(f"💡 SL unit changed to {unit} - Standard pip calculation")
+                self.log(f"💡 Recommended range: 3-50 pips (asset dependent)")
+                
+            elif unit == "price":
+                if not current_value:
+                    self.sl_entry.delete(0, tk.END)
+                    self.sl_entry.insert(0, "0.0")
+                self.log(f"💡 SL unit changed to {unit} - Direct price level")
+                self.log(f"💡 Enter exact price level for Stop Loss")
+                
+            elif unit == "percent":
+                if not current_value or float(current_value) > 3:
+                    self.sl_entry.delete(0, tk.END)
+                    self.sl_entry.insert(0, "0.5")
+                self.log(f"💡 SL unit changed to {unit} - Entry price percentage")
+                self.log(f"💡 Recommended range: 0.1% - 3% from entry price")
+                
+            elif unit in ["balance%", "equity%"]:
                 if not current_value or float(current_value) > 10.0:
                     self.sl_entry.delete(0, tk.END)
-                    self.sl_entry.insert(0, "1.0")  # Default 1%
-                self.log(f"💡 SL unit changed to {unit} - Value represents percentage")
-                self.log(f"💡 Recommended range: 0.1% - 10% of {unit.split('%')[0]}")
+                    self.sl_entry.insert(0, "1.0")
+                self.log(f"💡 SL unit changed to {unit} - Account percentage")
+                self.log(f"💡 Recommended range: 0.1% - 5% of {unit.split('%')[0]}")
+                
+            elif unit == "money":
+                if not current_value or float(current_value) > 1000:
+                    self.sl_entry.delete(0, tk.END)
+                    self.sl_entry.insert(0, "50")
+                self.log(f"💡 SL unit changed to {unit} - Fixed currency amount")
+                self.log(f"💡 Enter amount in account currency (e.g. $50)")
             
         except Exception as e:
             self.log(f"❌ Error changing SL unit: {str(e)}")
@@ -519,30 +579,28 @@ class TradingBotGUI:
             return 10.0
     
     def get_tp_unit(self) -> str:
-        """Get TP unit from GUI"""
+        """Get TP unit from GUI dropdown - REAL-TIME USER SELECTION"""
         try:
-            strategy = self.current_strategy
-            if strategy in DEFAULT_PARAMS:
-                unit = DEFAULT_PARAMS[strategy].get("tp_unit", "pips")
-                logger(f"🔍 GUI: TP unit for {strategy} = {unit}")
+            unit = self.tp_unit_combo.get()
+            if unit in ["pips", "price", "percent", "balance%", "equity%", "money"]:
+                logger(f"🔍 GUI: TP unit selected by user = {unit}")
                 return unit
             else:
-                logger(f"⚠️ GUI: Strategy {strategy} not found in params, using default")
+                logger(f"⚠️ GUI: Invalid TP unit '{unit}', using default")
                 return "pips"
         except Exception as e:
             logger(f"❌ GUI: Error getting TP unit: {str(e)}")
             return "pips"
     
     def get_sl_unit(self) -> str:
-        """Get SL unit from GUI"""
+        """Get SL unit from GUI dropdown - REAL-TIME USER SELECTION"""
         try:
-            strategy = self.current_strategy
-            if strategy in DEFAULT_PARAMS:
-                unit = DEFAULT_PARAMS[strategy].get("sl_unit", "pips")
-                logger(f"🔍 GUI: SL unit for {strategy} = {unit}")
+            unit = self.sl_unit_combo.get()
+            if unit in ["pips", "price", "percent", "balance%", "equity%", "money"]:
+                logger(f"🔍 GUI: SL unit selected by user = {unit}")
                 return unit
             else:
-                logger(f"⚠️ GUI: Strategy {strategy} not found in params, using default")
+                logger(f"⚠️ GUI: Invalid SL unit '{unit}', using default")
                 return "pips"
         except Exception as e:
             logger(f"❌ GUI: Error getting SL unit: {str(e)}")
