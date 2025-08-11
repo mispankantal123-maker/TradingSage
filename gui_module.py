@@ -114,48 +114,51 @@ class TradingBotGUI:
         self.strategy_combo.bind("<<ComboboxSelected>>", self.on_strategy_change)
         
         ttk.Label(params_frame, text="Symbol:").grid(row=0, column=2, sticky="w", padx=(0,3))
-        self.symbol_combo = ttk.Combobox(params_frame, width=12, state="readonly")
+        # Create editable symbol combo for manual input
+        self.symbol_combo = ttk.Combobox(params_frame, width=12)  # Remove state="readonly" to allow manual input
         self.symbol_combo.grid(row=0, column=3, padx=(0, 5), sticky="ew")
+        self.symbol_combo.bind("<<ComboboxSelected>>", self.on_symbol_change)
+        self.symbol_combo.bind("<KeyRelease>", self.on_symbol_manual_input)
         
-        # Row 1: Lot Size and TP
+        # Row 1: Lot Size and SL (FIXED: Label was swapped)
         ttk.Label(params_frame, text="Lot:").grid(row=1, column=0, sticky="w", padx=(0,3))
         self.lot_entry = ttk.Entry(params_frame, width=8)
         self.lot_entry.insert(0, "0.01")
         self.lot_entry.grid(row=1, column=1, padx=(0, 10), sticky="w")
         
-        ttk.Label(params_frame, text="TP:").grid(row=1, column=2, sticky="w", padx=(0,3))
+        ttk.Label(params_frame, text="SL:").grid(row=1, column=2, sticky="w", padx=(0,3))
         
-        # TP Frame for value and unit
-        tp_frame = ttk.Frame(params_frame)
-        tp_frame.grid(row=1, column=3, padx=(0, 5), sticky="w")
-        
-        self.tp_entry = ttk.Entry(tp_frame, width=6)
-        self.tp_entry.insert(0, "20")
-        self.tp_entry.grid(row=0, column=0, padx=(0, 2))
-        
-        from config import TP_SL_UNITS
-        self.tp_unit_combo = ttk.Combobox(tp_frame, values=TP_SL_UNITS, 
-                                         state="readonly", width=8)
-        self.tp_unit_combo.set("pips")
-        self.tp_unit_combo.grid(row=0, column=1)
-        self.tp_unit_combo.bind("<<ComboboxSelected>>", self.on_tp_unit_change)
-        
-        # Row 2: SL and Scan Interval
-        ttk.Label(params_frame, text="SL:").grid(row=2, column=0, sticky="w", padx=(0,3))
-        
-        # SL Frame for value and unit  
+        # SL Frame for value and unit (FIXED: This was labeled as TP before)
         sl_frame = ttk.Frame(params_frame)
-        sl_frame.grid(row=2, column=1, padx=(0, 10), sticky="w")
+        sl_frame.grid(row=1, column=3, padx=(0, 5), sticky="w")
         
         self.sl_entry = ttk.Entry(sl_frame, width=6)
         self.sl_entry.insert(0, "10")
         self.sl_entry.grid(row=0, column=0, padx=(0, 2))
         
+        from config import TP_SL_UNITS
         self.sl_unit_combo = ttk.Combobox(sl_frame, values=TP_SL_UNITS, 
                                          state="readonly", width=8)
         self.sl_unit_combo.set("pips")
         self.sl_unit_combo.grid(row=0, column=1)
         self.sl_unit_combo.bind("<<ComboboxSelected>>", self.on_sl_unit_change)
+        
+        # Row 2: TP and Scan Interval (FIXED: This was labeled as SL before)
+        ttk.Label(params_frame, text="TP:").grid(row=2, column=0, sticky="w", padx=(0,3))
+        
+        # TP Frame for value and unit (FIXED: This was labeled as SL before)  
+        tp_frame = ttk.Frame(params_frame)
+        tp_frame.grid(row=2, column=1, padx=(0, 10), sticky="w")
+        
+        self.tp_entry = ttk.Entry(tp_frame, width=6)
+        self.tp_entry.insert(0, "20")
+        self.tp_entry.grid(row=0, column=0, padx=(0, 2))
+        
+        self.tp_unit_combo = ttk.Combobox(tp_frame, values=TP_SL_UNITS, 
+                                         state="readonly", width=8)
+        self.tp_unit_combo.set("pips")
+        self.tp_unit_combo.grid(row=0, column=1)
+        self.tp_unit_combo.bind("<<ComboboxSelected>>", self.on_tp_unit_change)
         
         # Scan Interval
         ttk.Label(params_frame, text="Scan Interval (sec):").grid(row=2, column=2, sticky="w", padx=(0,3))
@@ -544,6 +547,70 @@ class TradingBotGUI:
             
         except Exception as e:
             self.log(f"❌ Error changing SL unit: {str(e)}")
+    
+    def on_symbol_change(self, event=None):
+        """Handle symbol selection from dropdown"""
+        try:
+            symbol = self.symbol_combo.get()
+            self.log(f"📊 Symbol changed to: {symbol}")
+            
+            # Validate symbol exists in MT5
+            self.validate_symbol_data(symbol)
+            
+        except Exception as e:
+            self.log(f"❌ Error changing symbol: {str(e)}")
+    
+    def on_symbol_manual_input(self, event=None):
+        """Handle manual symbol input"""
+        try:
+            symbol = self.symbol_combo.get().upper()
+            if len(symbol) >= 3:  # Minimum 3 characters for validation
+                self.log(f"⌨️ Manual symbol input: {symbol}")
+                # Auto-validate after 3 characters
+                self.validate_symbol_data(symbol)
+                
+        except Exception as e:
+            self.log(f"❌ Error processing manual symbol: {str(e)}")
+    
+    def validate_symbol_data(self, symbol: str):
+        """Validate symbol can provide data from MT5"""
+        try:
+            if not symbol or len(symbol) < 3:
+                return False
+                
+            # Test symbol data availability
+            from data_manager import get_symbol_data
+            test_data = get_symbol_data(symbol, timeframe="M1", bars=10)
+            
+            if test_data is not None and len(test_data) > 0:
+                self.log(f"✅ Symbol {symbol} validated - data available")
+                
+                # Update symbol info display
+                try:
+                    import mt5_mock as mt5
+                    symbol_info = mt5.symbol_info(symbol)
+                    tick_info = mt5.symbol_info_tick(symbol)
+                    
+                    if symbol_info and tick_info:
+                        self.log(f"📈 {symbol} Info:")
+                        self.log(f"   Digits: {symbol_info.digits}")
+                        self.log(f"   Point: {symbol_info.point}")
+                        self.log(f"   Current Bid: {tick_info.bid}")
+                        self.log(f"   Current Ask: {tick_info.ask}")
+                        self.log(f"   Spread: {tick_info.ask - tick_info.bid:.{symbol_info.digits}f}")
+                        
+                except Exception as info_e:
+                    self.log(f"⚠️ Could not get detailed symbol info: {str(info_e)}")
+                    
+                return True
+            else:
+                self.log(f"❌ Symbol {symbol} validation failed - no data available")
+                self.log(f"💡 Check if {symbol} exists in your broker's Market Watch")
+                return False
+                
+        except Exception as e:
+            self.log(f"❌ Symbol validation error for {symbol}: {str(e)}")
+            return False
     
     def get_current_lot_size(self) -> float:
         """Get current lot size from GUI with validation"""

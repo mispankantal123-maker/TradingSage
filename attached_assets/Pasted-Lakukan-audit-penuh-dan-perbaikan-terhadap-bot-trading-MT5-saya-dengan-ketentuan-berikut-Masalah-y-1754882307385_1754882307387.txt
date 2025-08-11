@@ -1,0 +1,64 @@
+Lakukan audit penuh dan perbaikan terhadap bot trading MT5 saya dengan ketentuan berikut:
+
+Masalah yang harus diperbaiki:
+
+Dropdown Symbol Dummy
+
+Saat ini dropdown symbol hanya hiasan/dummy.
+
+Ketika user memilih symbol selain XAUUSDm / XAUUSD atau BTCUSDm / BTCUSD, log error muncul bahwa bot tidak bisa mengambil data symbol.
+
+Perbaikan:
+
+Pastikan dropdown symbol benar-benar mengambil data langsung dari MT5 (mt5.symbols_get()), bukan hardcode.
+
+Pastikan user bisa input manual symbol yang tidak ada di dropdown.
+
+Pastikan bot dapat memproses dan mengambil data untuk semua symbol yang tersedia di akun broker MT5 (termasuk pair forex, crypto, indeks, dll).
+
+TP & SL Tertukar di GUI
+
+Label TP & SL di GUI terbalik (TP menjadi SL dan SL menjadi TP).
+
+Perbaikan: Tukar label sesuai fungsi yang benar tanpa mengubah kalkulasi order.
+
+Bot Berhenti Sendiri
+
+Sering muncul log:
+
+arduino
+Copy
+Edit
+🛑 Bot stopped via global flag - exiting trading loop  
+🛑 Bot thread stopped
+Perbaikan: Cari dan hilangkan bug yang memicu global_stop_flag tanpa alasan valid. Pastikan bot hanya berhenti jika user menekan tombol stop atau ada kondisi error kritis.
+
+GUI & Sistem Tidak Bisa Membaca Symbol
+
+Beberapa fungsi GUI & sistem gagal membaca data symbol dari MT5.
+
+Perbaikan: Pastikan semua modul yang butuh harga/data symbol bisa mengambil data dari fungsi pusat (centralized symbol data fetcher).
+
+TP/SL Dropdown & Kalkulasi Error
+
+Kalkulasi TP/SL dari dropdown pilihan (pips, %, price, money) tidak konsisten atau tidak jalan.
+
+Perbaikan: Pastikan semua opsi TP/SL benar-benar mempengaruhi order sesuai pilihan user.
+
+Strategi Tidak Terimplementasi Benar
+
+Strategi intraday, scalping, high-frequency (HF), arbitrage tidak benar-benar berjalan sesuai pilihan user.
+
+Perbaikan: Pastikan semua strategi memiliki logika trading yang aktif, dan hanya strategi yang dipilih user yang dijalankan.
+
+Syarat Tambahan:
+
+Jangan ubah sistem inti, arsitektur, atau modul yang sudah berfungsi dengan baik.
+
+Bot harus 100% kompatibel dengan Windows, real account, dan broker MT5 resmi.
+
+Semua komponen (command, strategi, logic, dropdown, symbol, order, TP/SL) harus saling terkoneksi & terintegrasi.
+
+Tidak boleh ada dummy file atau placeholder.
+
+Tetap optimalkan kinerja (hindari freeze / not responding).
