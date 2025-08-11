@@ -193,6 +193,32 @@ class TradingBotGUI:
         self.interval_entry.insert(0, "10")  # Default 10 seconds instead of 30
         self.interval_entry.grid(row=2, column=3, padx=(0, 5), sticky="w")
 
+        # Row 3: Order Limit Controls (NEW)
+        ttk.Label(params_frame, text="Max Orders:").grid(row=3, column=0, sticky="w", padx=(0,3))
+        
+        # Order limit frame
+        order_limit_frame = ttk.Frame(params_frame)
+        order_limit_frame.grid(row=3, column=1, padx=(0, 10), sticky="w")
+        
+        self.max_orders_entry = ttk.Entry(order_limit_frame, width=4)
+        self.max_orders_entry.insert(0, "10")
+        self.max_orders_entry.grid(row=0, column=0, padx=(0, 2))
+        
+        self.set_limit_btn = ttk.Button(order_limit_frame, text="Set", command=self.set_order_limit, width=4)
+        self.set_limit_btn.grid(row=0, column=1)
+        
+        # Order count and reset
+        ttk.Label(params_frame, text="Order Count:").grid(row=3, column=2, sticky="w", padx=(0,3))
+        
+        count_reset_frame = ttk.Frame(params_frame)
+        count_reset_frame.grid(row=3, column=3, padx=(0, 5), sticky="w")
+        
+        self.order_count_lbl = ttk.Label(count_reset_frame, text="0/10", foreground="blue")
+        self.order_count_lbl.grid(row=0, column=0, padx=(0, 5))
+        
+        self.reset_count_btn = ttk.Button(count_reset_frame, text="Reset", command=self.reset_order_count, width=5)
+        self.reset_count_btn.grid(row=0, column=1)
+
         # Left panel - Account info and positions
         left_frame = ttk.Frame(main_frame)
         left_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
@@ -865,6 +891,9 @@ class TradingBotGUI:
 
             # Update positions
             self.update_positions()
+            
+            # Update order count display
+            self.update_order_count_display()
 
             # Log performance update periodically
             if self._update_counter % 20 == 0:
@@ -1042,3 +1071,55 @@ class TradingBotGUI:
             return float(self.lot_entry.get())
         except:
             return 0.01
+
+    def set_order_limit(self):
+        """Set new order limit from GUI input"""
+        try:
+            new_limit = int(self.max_orders_entry.get())
+            
+            from risk_management import set_max_orders_limit
+            if set_max_orders_limit(new_limit):
+                self.log(f"✅ Order limit set to: {new_limit}")
+                self.update_order_count_display()
+            else:
+                self.log(f"❌ Invalid order limit: {new_limit}")
+                # Reset to current value
+                from risk_management import max_orders_limit
+                self.max_orders_entry.delete(0, tk.END)
+                self.max_orders_entry.insert(0, str(max_orders_limit))
+                
+        except ValueError:
+            self.log("❌ Order limit must be a number")
+        except Exception as e:
+            self.log(f"❌ Error setting order limit: {str(e)}")
+
+    def reset_order_count(self):
+        """Reset order count from GUI"""
+        try:
+            from risk_management import reset_order_count
+            reset_order_count()
+            self.update_order_count_display()
+            self.log("🔄 Order count reset to 0")
+        except Exception as e:
+            self.log(f"❌ Error resetting order count: {str(e)}")
+
+    def update_order_count_display(self):
+        """Update order count display in GUI"""
+        try:
+            from risk_management import get_order_limit_status
+            status = get_order_limit_status()
+            
+            count_text = f"{status['current_count']}/{status['max_limit']}"
+            
+            # Color code based on usage
+            if status['percentage_used'] >= 90:
+                color = "red"
+            elif status['percentage_used'] >= 70:
+                color = "orange"
+            else:
+                color = "green"
+                
+            self.order_count_lbl.config(text=count_text, foreground=color)
+            
+        except Exception as e:
+            self.order_count_lbl.config(text="ERR", foreground="red")

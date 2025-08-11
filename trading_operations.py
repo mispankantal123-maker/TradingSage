@@ -694,6 +694,12 @@ def close_all_orders(symbol: str = None) -> None:
 def execute_trade_signal(symbol: str, action: str) -> bool:
     """Execute trade based on strategy signal with GUI parameter integration"""
     try:
+        # Check order limit first
+        from risk_management import check_order_limit
+        if not check_order_limit():
+            logger("🛑 Order limit reached - skipping trade execution")
+            return False
+        
         # Get current strategy from GUI (will be set by main module)
         current_strategy = "Scalping"  # Default fallback
 

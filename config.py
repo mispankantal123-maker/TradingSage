@@ -69,6 +69,12 @@ MAX_RISK_PERCENTAGE = 2.0
 MAX_DAILY_TRADES = 50
 MAX_OPEN_POSITIONS = 10
 
+# Manual Limit Order Settings
+DEFAULT_MAX_ORDERS = 10  # Default limit
+MIN_MAX_ORDERS = 1       # Minimum allowed
+MAX_MAX_ORDERS = 100     # Maximum allowed
+ORDER_RESET_ENABLED = True
+
 # Trading Sessions (UTC)
 TRADING_SESSIONS = {
     "Asian": {"start": 0, "end": 9},

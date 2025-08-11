@@ -17,7 +17,7 @@ from indicators import calculate_indicators
 from strategies import run_strategy
 from trading_operations import execute_trade_signal
 from session_management import check_trading_time, get_current_trading_session, adjust_strategy_for_session
-from risk_management import risk_management_check, check_daily_limits, increment_daily_trade_count, auto_recovery_check
+from risk_management import risk_management_check, check_daily_limits, increment_daily_trade_count, auto_recovery_check, check_order_limit
 from ai_analysis import ai_market_analysis
 from performance_tracking import send_hourly_report
 from validation_utils import validate_trading_conditions
@@ -30,14 +30,14 @@ current_strategy = "Scalping"
 def bot_thread() -> None:
     """Main bot thread - identical logic to original but modular"""
     global bot_running, current_strategy
-    
+
     try:
         logger("🚀 Trading bot thread started")
         logger("🔍 Initializing automated trading system...")
-        
+
         # Reset daily counters
         check_daily_limits()
-        
+
         # Main trading loop - FIXED stop mechanism
         while True:
             try:
@@ -45,12 +45,12 @@ def bot_thread() -> None:
                 if not bot_running:
                     logger("🛑 Bot stop signal received - exiting trading loop immediately")
                     break
-                
+
                 # CRITICAL: Second stop check before time validation
                 if not bot_running:
                     logger("🛑 Bot stopped during time check")
                     break
-                
+
                 # Check if trading time is appropriate
                 if not check_trading_time():
                     logger("⏰ Outside trading hours, waiting...")
@@ -61,12 +61,12 @@ def bot_thread() -> None:
                             return
                         time.sleep(1)
                     continue
-                
+
                 # CRITICAL: Third stop check before MT5 validation
                 if not bot_running:
                     logger("🛑 Bot stopped during MT5 check")
                     break
-                
+
                 # Check MT5 connection status
                 if not check_mt5_status():
                     logger("❌ MT5 connection lost, attempting recovery...")
@@ -80,13 +80,13 @@ def bot_thread() -> None:
                                 return
                             time.sleep(1)
                         continue
-                
+
                 # Risk management check
                 if not risk_management_check():
                     logger("🛡️ Risk management check failed, pausing trading...")
                     time.sleep(300)  # Wait 5 minutes
                     continue
-                
+
                 # Get current strategy from GUI at start
                 try:
                     import __main__
@@ -99,12 +99,12 @@ def bot_thread() -> None:
                     logger(f"⚠️ GUI connection issue: {str(gui_e)}")
                     # Fallback to default strategy if GUI not accessible
                     current_strategy = "Scalping"
-                
+
                 # CRITICAL: Fourth stop check before symbol processing
                 if not bot_running:
                     logger("🛑 Bot stopped before symbol processing")
                     break
-                
+
                 # Get trading symbols
                 try:
                     import __main__
@@ -114,128 +114,119 @@ def bot_thread() -> None:
                         trading_symbols = DEFAULT_SYMBOLS[:3]  # Use first 3 default symbols
                 except:
                     trading_symbols = DEFAULT_SYMBOLS[:3]
-                
+
                 logger(f"📊 Analyzing {len(trading_symbols)} symbols with {current_strategy} strategy")
-                
+
                 # CRITICAL: Fifth stop check before data retrieval
                 if not bot_running:
                     logger("🛑 Bot stopped before data retrieval")
                     break
-                
+
                 # Get data for all symbols
                 symbol_data = get_multiple_symbols_data(trading_symbols)
-                
+
                 if not symbol_data:
                     logger("❌ No symbol data available, waiting...")
                     time.sleep(60)
                     continue
-                
+
                 # Process each symbol
                 signals_found = 0
-                
+
                 for symbol, df in symbol_data.items():
                     try:
                         # CRITICAL: Stop check at start of each symbol processing
                         if not bot_running:
                             logger(f"🛑 Bot stopped during {symbol} analysis")
                             return
-                        
+
                         # Calculate indicators
                         df_with_indicators = calculate_indicators(df)
-                        
+
                         if df_with_indicators is None:
                             logger(f"⚠️ Indicator calculation failed for {symbol}")
                             continue
-                        
+
                         # CRITICAL: Stop check before strategy execution
                         if not bot_running:
                             logger(f"🛑 Bot stopped before strategy execution for {symbol}")
                             return
-                        
+
                         # Run strategy with current strategy from GUI
                         action, signals = run_strategy(current_strategy, df_with_indicators, symbol)
-                        
+
                         if action and len(signals) > 0:
                             signals_found += 1
                             logger(f"🎯 Signal detected for {symbol}: {action}")
-                            
+
                             # Validate trading conditions
                             conditions_ok, condition_msg = validate_trading_conditions(symbol)
                             if not conditions_ok:
                                 logger(f"⚠️ Trading conditions not met for {symbol}: {condition_msg}")
                                 continue
-                            
+
                             # Get current trading session and adjustments
                             current_session = get_current_trading_session()
                             session_adjustments = adjust_strategy_for_session(current_strategy, current_session)
-                            
+
                             # FIXED: Apply more lenient signal filtering for live trading
                             signal_threshold = 1 + session_adjustments.get("signal_threshold_modifier", 0)
                             if len(signals) < signal_threshold:
                                 logger(f"⚪ {symbol}: Signal strength {len(signals)} below threshold {signal_threshold}")
                                 continue
-                            
-                            # CRITICAL: Final stop check before trade execution
-                            if not bot_running:
-                                logger(f"🛑 Bot stopped before executing trade for {symbol}")
-                                return
-                            
-                            # Execute trading signals with proper GUI parameter integration
-                            logger(f"🎯 Executing {action} signal for {symbol}")
-                            logger(f"📋 Signals: {signals}")
-                            
-                            # DEBUG: Log current GUI settings before execution
+
                             try:
-                                import __main__
-                                if hasattr(__main__, 'gui') and __main__.gui:
-                                    tp_val = __main__.gui.tp_entry.get()
-                                    sl_val = __main__.gui.sl_entry.get()  
-                                    tp_unit = __main__.gui.tp_unit_combo.get()
-                                    sl_unit = __main__.gui.sl_unit_combo.get()
-                                    lot_val = __main__.gui.lot_entry.get()
-                                    
-                                    logger(f"📊 GUI Settings at execution:")
-                                    logger(f"   Symbol: {symbol}")
-                                    logger(f"   Lot Size: {lot_val}")
-                                    logger(f"   TP: {tp_val} {tp_unit}")
-                                    logger(f"   SL: {sl_val} {sl_unit}")
-                            except:
-                                pass
-                            
-                            try:
+                                # CRITICAL: Final stop check before trade execution
+                                if not bot_running:
+                                    logger(f"🛑 Bot stopped before executing trade for {symbol}")
+                                    return
+
+                                # Check order limit before execution
+                                if not check_order_limit():
+                                    logger(f"🛑 Order limit reached - skipping {symbol}")
+                                    continue
+
                                 # Get ALL parameters from GUI with proper validation
                                 success = execute_trade_signal(symbol, action)
-                                
+
                                 if success:
                                     increment_daily_trade_count()
                                     logger(f"✅ Trade executed successfully for {symbol}")
+
+                                    # Update GUI order count immediately
+                                    try:
+                                        import __main__
+                                        if hasattr(__main__, 'gui') and __main__.gui:
+                                            __main__.gui.update_order_count_display()
+                                    except:
+                                        pass
                                 else:
                                     logger(f"❌ Trade execution failed for {symbol}")
-                                    
+
                             except Exception as trade_e:
                                 logger(f"❌ Trade execution error for {symbol}: {str(trade_e)}")
-                        
+
                         # Small delay between symbol processing
                         time.sleep(2)
-                        
+
                     except Exception as symbol_e:
                         logger(f"❌ Error processing {symbol}: {str(symbol_e)}")
                         continue
-                
+
                 # Log summary
                 if signals_found > 0:
                     logger(f"📊 Scan complete: {signals_found} signals found from {len(symbol_data)} symbols")
                 else:
                     logger(f"📊 Scan complete: No signals found from {len(symbol_data)} symbols")
-                
+
                 # Auto-recovery check
                 auto_recovery_check()
-                
+
                 # Send hourly report
                 current_time = datetime.datetime.now()
                 if current_time.minute == 0:  # Top of the hour
                     send_hourly_report()
-                
+
                 # Get scan interval from GUI
                 scan_interval = 30  # Default fallback
                 try:
@@ -246,7 +237,7 @@ def bot_thread() -> None:
                             scan_interval = max(5, min(int(interval_text), 300))  # 5-300 seconds range
                 except:
                     pass
-                
+
                 # CRITICAL: Interruptible wait - check stop signal during wait
                 logger(f"⏳ Waiting {scan_interval} seconds before next scan...")
                 for wait_second in range(scan_interval):
@@ -254,26 +245,26 @@ def bot_thread() -> None:
                         logger("🛑 Bot stopped during scan interval wait")
                         return
                     time.sleep(1)
-                
+
             except KeyboardInterrupt:
                 logger("⚠️ Bot interrupted by user")
                 break
-                
+
             except Exception as cycle_e:
                 logger(f"❌ Error in trading cycle: {str(cycle_e)}")
                 import traceback
                 logger(f"📝 Traceback: {traceback.format_exc()}")
                 time.sleep(60)  # Wait 1 minute before retry
-                
+
     except Exception as e:
         logger(f"❌ Critical error in bot thread: {str(e)}")
         import traceback
         logger(f"📝 Critical traceback: {traceback.format_exc()}")
-        
+
     finally:
         bot_running = False
         logger("🛑 Bot thread stopped")
-        
+
         # Update GUI status if available
         try:
             import __main__
@@ -286,18 +277,18 @@ def bot_thread() -> None:
 def start_bot_thread():
     """Start the bot in a separate thread"""
     global bot_running
-    
+
     if bot_running:
         logger("⚠️ Bot is already running")
         return False
-    
+
     try:
         bot_running = True
         bot_worker = threading.Thread(target=bot_thread, daemon=True)
         bot_worker.start()
         logger("🚀 Bot thread launched successfully")
         return True
-        
+
     except Exception as e:
         logger(f"❌ Error starting bot thread: {str(e)}")
         bot_running = False
@@ -307,14 +298,14 @@ def start_bot_thread():
 def stop_bot():
     """Stop the trading bot immediately"""
     global bot_running
-    
+
     if not bot_running:
         logger("ℹ️ Bot is not running")
         return
-    
+
     logger("🛑 EMERGENCY STOP - Setting bot_running to False immediately")
     bot_running = False
-    
+
     # Force update GUI if available
     try:
         import __main__
@@ -324,13 +315,13 @@ def stop_bot():
             __main__.gui.stop_btn.config(state="disabled")
     except:
         pass
-    
+
     logger("✅ Trading bot FORCE STOPPED - All operations halted")
 
 
 def start_auto_recovery_monitor():
     """Background monitoring thread for auto-recovery"""
-    
+
     def recovery_monitor():
         while True:
             try:
@@ -340,7 +331,7 @@ def start_auto_recovery_monitor():
             except Exception as e:
                 logger(f"❌ Recovery monitor error: {str(e)}")
                 time.sleep(60)
-    
+
     recovery_thread = threading.Thread(target=recovery_monitor, daemon=True)
     recovery_thread.start()
     logger("🔄 Auto-recovery monitor started")
@@ -350,9 +341,9 @@ def get_bot_status() -> Dict[str, Any]:
     """Get current bot status information"""
     try:
         from risk_management import get_current_risk_metrics
-        
+
         risk_metrics = get_current_risk_metrics()
-        
+
         status = {
             'running': bot_running,
             'current_strategy': current_strategy,
@@ -363,9 +354,9 @@ def get_bot_status() -> Dict[str, Any]:
             'open_positions': risk_metrics.get('open_positions', 0),
             'last_update': datetime.datetime.now().strftime('%H:%M:%S')
         }
-        
+
         return status
-        
+
     except Exception as e:
         logger(f"❌ Error getting bot status: {str(e)}")
         return {
@@ -378,17 +369,17 @@ def emergency_stop_all():
     """Emergency stop all operations"""
     try:
         logger("🚨 EMERGENCY STOP INITIATED!")
-        
+
         # Stop bot
         global bot_running
         bot_running = False
-        
+
         # Close all positions
         from trading_operations import close_all_orders
         close_all_orders()
-        
+
         logger("🛑 Emergency stop completed")
-        
+
     except Exception as e:
         logger(f"❌ Error during emergency stop: {str(e)}")
 
@@ -398,25 +389,25 @@ def run_single_analysis(symbol: str, strategy: str = None) -> Dict[str, Any]:
     try:
         if strategy is None:
             strategy = current_strategy
-        
+
         logger(f"🔍 Running single analysis: {symbol} with {strategy}")
-        
+
         # Get data
         df = get_symbol_data(symbol)
         if df is None:
             return {'error': 'No data available'}
-        
+
         # Calculate indicators
         df_with_indicators = calculate_indicators(df)
         if df_with_indicators is None:
             return {'error': 'Indicator calculation failed'}
-        
+
         # Run strategy
         action, signals = run_strategy(strategy, df_with_indicators, symbol)
-        
+
         # AI analysis
         ai_result = ai_market_analysis(symbol, df_with_indicators)
-        
+
         result = {
             'symbol': symbol,
             'strategy': strategy,
@@ -427,9 +418,9 @@ def run_single_analysis(symbol: str, strategy: str = None) -> Dict[str, Any]:
             'timestamp': datetime.datetime.now().strftime('%H:%M:%S'),
             'data_bars': len(df)
         }
-        
+
         return result
-        
+
     except Exception as e:
         logger(f"❌ Error in single analysis: {str(e)}")
         return {'error': str(e)}
