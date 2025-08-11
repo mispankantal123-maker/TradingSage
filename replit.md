@@ -192,6 +192,14 @@ This project is a professional-grade algorithmic trading platform designed for a
 - ✅ **Enhanced BUY Bias**: Double weight for EMA uptrend + additional strong uptrend condition
 - ✅ **Momentum Integration**: Price momentum properly integrated for signal generation
 
+### BALANCE PERCENTAGE IMPLEMENTATION (January 2025)
+- ✅ **Balance% Unit Added**: New "balance%" option in GUI TP/SL dropdowns
+- ✅ **Proper Balance Calculation**: 2% balance = 2% of account balance ($200 on $10k)
+- ✅ **Equity% Support Added**: Also supports percentage of account equity
+- ✅ **Unit Mapping Enhanced**: Complete mapping for all percentage types
+- ✅ **Reasonable Values**: No more extreme IDR values, proper risk management
+- ✅ **MT5 Integration**: Balance-based TP/SL properly sent to MT5 orders
+
 ## Next Steps for Live Trading
 
 1. **Deploy to Windows**: Set up Windows environment with MT5

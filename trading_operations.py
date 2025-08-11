@@ -71,8 +71,8 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
             return round(value, digits)
             
         elif unit.lower() in ["percent", "percentage", "%"]:
-            # Mode 3: PERCENTAGE - Based on entry price percentage 
-            # This is what user expects when they select "percent"
+            # Mode 3A: PERCENTAGE - Based on entry price percentage 
+            # This is for "percent" selection (price-based)
             percentage = abs_value
             
             # Calculate percentage-based TP/SL directly from current price
@@ -86,6 +86,60 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
                     return current_price * (1 - percentage / 100)  # SL below entry
                 else:  # SELL
                     return current_price * (1 + percentage / 100)  # SL above entry
+                    
+        elif unit.lower() in ["balance%", "balance_percent"]:
+            # Mode 3B: BALANCE PERCENTAGE - Based on account balance
+            if not account_info:
+                logger(f"❌ Cannot get account info for balance% calculation")
+                return 0.0
+                
+            balance = account_info.balance
+            percentage_amount = balance * (abs_value / 100)  # Amount in currency
+            
+            # Convert to price distance based on lot size and pip value
+            pip_value = calculate_pip_value(symbol, lot_size)
+            if pip_value <= 0:
+                pip_value = 10.0  # Fallback
+                
+            pips_distance = percentage_amount / pip_value
+            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            
+            logger(f"💰 Balance%: {abs_value}% of ${balance:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
+            
+        elif unit.lower() in ["equity%", "equity_percent"]:
+            # Mode 3C: EQUITY PERCENTAGE - Based on account equity
+            if not account_info:
+                logger(f"❌ Cannot get account info for equity% calculation")
+                return 0.0
+                
+            equity = account_info.equity
+            percentage_amount = equity * (abs_value / 100)  # Amount in currency
+            
+            # Convert to price distance based on lot size and pip value  
+            pip_value = calculate_pip_value(symbol, lot_size)
+            if pip_value <= 0:
+                pip_value = 10.0  # Fallback
+                
+            pips_distance = percentage_amount / pip_value
+            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            
+            logger(f"💰 Equity%: {abs_value}% of ${equity:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
+            if not account_info:
+                logger(f"❌ Cannot get account info for equity% calculation")
+                return 0.0
+                
+            equity = account_info.equity
+            percentage_amount = equity * (abs_value / 100)  # Amount in currency
+            
+            # Convert to price distance based on lot size and pip value  
+            pip_value = calculate_pip_value(symbol, lot_size)
+            if pip_value <= 0:
+                pip_value = 10.0  # Fallback
+                
+            pips_distance = percentage_amount / pip_value
+            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
+            
+            logger(f"💰 Equity%: {abs_value}% of ${equity:.2f} = ${percentage_amount:.2f} = {pips_distance:.1f} pips")
             
         elif unit.lower() == "money":
             # Mode 4: MONEY - Fixed currency amount for TP/SL
