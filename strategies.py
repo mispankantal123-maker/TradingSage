@@ -19,15 +19,36 @@ from indicators import calculate_support_resistance
 
 
 def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional[str], List[str]]:
-    """Enhanced strategy execution with MTF analysis and dynamic position sizing"""
+    """Enhanced strategy execution dengan ROBUST analysis engine integration"""
     try:
-        logger(f"🎯 Running {strategy} strategy for {symbol}")
+        logger(f"🎯 Running ENHANCED {strategy} strategy for {symbol}")
 
         if len(df) < 50:
             logger(f"❌ Insufficient data for {symbol}: {len(df)} bars (need 50+)")
             return None, [f"Insufficient data: {len(df)} bars"]
 
-        # PROFESSIONAL UPGRADE: Multi-timeframe confluence check
+        # ENHANCED: Use new robust analysis engine first
+        try:
+            from enhanced_analysis_engine import get_enhanced_analysis
+            enhanced_result = get_enhanced_analysis(symbol, strategy, df)
+            
+            if enhanced_result.get("signal"):
+                confidence = enhanced_result.get("confidence", 0)
+                if confidence >= 0.7:  # High confidence threshold
+                    logger(f"✅ ENHANCED ANALYSIS: {enhanced_result['signal']} signal (Confidence: {confidence:.1%})")
+                    logger(f"   🔍 Reason: {enhanced_result.get('reason', 'N/A')}")
+                    
+                    # Use enhanced analysis result
+                    return enhanced_result["signal"], [enhanced_result.get("reason", "Enhanced analysis signal")]
+                else:
+                    logger(f"⚠️ ENHANCED ANALYSIS: Low confidence signal rejected ({confidence:.1%})")
+            else:
+                logger(f"🔍 ENHANCED ANALYSIS: No signal - {enhanced_result.get('reason', 'No clear signal detected')}")
+                
+        except Exception as enhanced_e:
+            logger(f"⚠️ Enhanced analysis error, using fallback: {str(enhanced_e)}")
+
+        # PROFESSIONAL UPGRADE: Multi-timeframe confluence check (fallback)
         try:
             from multi_timeframe_analysis import should_trade_based_on_mtf
             should_trade, mtf_direction, mtf_analysis = should_trade_based_on_mtf(symbol, strategy, min_confluence_score=65)

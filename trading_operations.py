@@ -1,16 +1,14 @@
-# --- Trading Operations Module ---
+# --- Trading Operations Module - FIXED VERSION ---
 """
-Order execution, position management, and trading operations - REAL TRADING ONLY
+Core trading operations: order execution, TP/SL calculation, position management
 """
 
 import datetime
-from typing import Optional, Dict, Any, Tuple
-from logger_utils import logger, log_order_csv
-from validation_utils import validate_tp_sl_levels, validate_trading_conditions
-from config import DEFAULT_PARAMS
-from telegram_notifications import notify_trade_executed, notify_position_closed
+import time
+from typing import Dict, Any, Tuple, Optional, List
+from logger_utils import logger
 
-# SMART MT5 Connection - Real on Windows, Mock for Development
+# Smart MT5 connection  
 try:
     import MetaTrader5 as mt5
     print("✅ Trading Operations using REAL MT5")
@@ -18,61 +16,42 @@ except ImportError:
     import mt5_mock as mt5
     print("⚠️ Trading Operations using mock for development")
 
-# PROFESSIONAL UPGRADES: Import enhanced modules
-try:
-    from enhanced_position_sizing import get_dynamic_position_size
-    DYNAMIC_SIZING_AVAILABLE = True
-    logger("✅ Dynamic position sizing loaded")
-except ImportError:
-    DYNAMIC_SIZING_AVAILABLE = False
-    logger("⚠️ Dynamic position sizing not available")
 
-try:
-    from trailing_stop_manager import add_trailing_stop_to_position, start_trailing_stop_system
-    TRAILING_STOPS_AVAILABLE = True
-    logger("✅ Trailing stop system loaded")
-except ImportError:
-    TRAILING_STOPS_AVAILABLE = False
-    logger("⚠️ Trailing stop system not available")
-
-try:
-    from economic_calendar import should_pause_for_news, start_economic_calendar
-    ECONOMIC_CALENDAR_AVAILABLE = True
-    logger("✅ Economic calendar loaded")
-except ImportError:
-    ECONOMIC_CALENDAR_AVAILABLE = False
-    logger("⚠️ Economic calendar not available")
-
-try:
-    from drawdown_manager import get_recovery_adjustments, add_trade_to_tracking, initialize_drawdown_tracking
-    DRAWDOWN_MANAGER_AVAILABLE = True
-    logger("✅ Drawdown manager loaded")
-except ImportError:
-    DRAWDOWN_MANAGER_AVAILABLE = False
-    logger("⚠️ Drawdown manager not available")
-
-
-def calculate_pip_value(symbol: str, lot_size: float) -> float:
-    """Calculate pip value for position sizing"""
+def calculate_pip_value(symbol: str, lot_size: float = 0.01, current_price: float = 1.0) -> float:
+    """Calculate pip value for position sizing - REAL calculations"""
     try:
         symbol_info = mt5.symbol_info(symbol)
-        if not symbol_info:
+        account_info = mt5.account_info()
+        
+        if not symbol_info or not account_info:
             return 1.0
-
+            
+        # Get contract specifications
+        contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
+        point = getattr(symbol_info, 'point', 0.00001)
+        
+        # Calculate pip value based on symbol type
         if "JPY" in symbol:
-            pip_value = lot_size * 100000 * 0.01
+            pip_multiplier = 0.01  # JPY pairs use 2 decimal places
         else:
-            pip_value = lot_size * 100000 * 0.0001
-
+            pip_multiplier = 0.0001  # Other pairs use 4 decimal places
+            
+        pip_value = lot_size * contract_size * pip_multiplier
+        
+        # Convert to account currency if needed
+        if hasattr(symbol_info, 'currency_profit'):
+            # This is a simplification - real implementation would need currency conversion
+            pass
+            
         return pip_value
-
+        
     except Exception as e:
         logger(f"❌ Error calculating pip value: {str(e)}")
         return 1.0
 
 
 def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_type: str, current_price: float, lot_size: float = 0.01) -> float:
-    """Calculate TP/SL for all modes: pips, price, percentage, money - REAL CALCULATIONS"""
+    """Calculate TP/SL for all modes: pips, price, percentage, money - ENHANCED CALCULATIONS"""
     try:
         if not input_value or input_value.strip() == "0":
             return 0.0
@@ -91,333 +70,239 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
         point = getattr(symbol_info, 'point', 0.00001)
         digits = getattr(symbol_info, 'digits', 5)
 
-        is_tp = value > 0
-        abs_value = abs(value)
-
+        # FIXED: Proper TP/SL calculation - NO REVERSAL for HFT or any strategy
         if unit.lower() == "pips":
+            # Standard pip calculation
             pip_multiplier = 10 if "JPY" in symbol else 10
-            distance = abs_value * point * pip_multiplier
+            distance = abs(value) * point * pip_multiplier
+            
+            # CORRECT TP/SL logic - NO reversal needed
+            if order_type.upper() == "BUY":
+                if value > 0:  # Take Profit
+                    return round(current_price + distance, digits)
+                else:  # Stop Loss (negative value)
+                    return round(current_price - distance, digits)
+            else:  # SELL order
+                if value > 0:  # Take Profit  
+                    return round(current_price - distance, digits)
+                else:  # Stop Loss (negative value)
+                    return round(current_price + distance, digits)
 
         elif unit.lower() == "price":
             return round(value, digits)
 
         elif unit.lower() in ["percent", "percentage", "%"]:
-            percentage = abs_value
-            if value < 0:  # Stop Loss
-                if order_type.upper() == "BUY":
-                    return current_price * (1 - percentage / 100)
-                else:  # SELL
-                    return current_price * (1 + percentage / 100)
-            else:  # Take Profit
-                if order_type.upper() == "BUY":
-                    return current_price * (1 + percentage / 100)
-                else:  # SELL
-                    return current_price * (1 - percentage / 100)
-
-        elif unit.lower() in ["balance%", "balance_percent"]:
-            if not account_info:
-                logger(f"❌ Cannot get account info for balance% calculation")
-                return 0.0
-
-            balance = account_info.balance
-            percentage_amount = (balance * abs_value) / 100
-
-            symbol_upper = symbol.upper()
-
-            # Asset class detection for real contracts
-            if any(metal in symbol_upper for metal in ['XAU', 'GOLD']):
-                contract_size = 100
-                point = 0.01
-                digits = 2
-            elif any(metal in symbol_upper for metal in ['XAG', 'SILVER']):
-                contract_size = 5000
-                point = 0.001
-                digits = 3
-            elif any(crypto in symbol_upper for crypto in ['BTC', 'ETH', 'LTC']):
-                contract_size = 1
-                point = 0.01
-                digits = 2
-            elif any(oil in symbol_upper for oil in ['OIL', 'WTI', 'BRENT']):
-                contract_size = 1000
-                point = 0.01
-                digits = 2
-            elif any(index in symbol_upper for index in ['US30', 'US500', 'NAS100']):
-                contract_size = 1
-                point = 1.0
-                digits = 0
-            else:
-                contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
-                point = getattr(symbol_info, 'point', 0.00001)
-                digits = getattr(symbol_info, 'digits', 5)
-
-            pip_value = lot_size * contract_size * point
-            if pip_value > 0:
-                pip_distance = percentage_amount / pip_value
-            else:
-                pip_distance = abs_value
-
-            # Apply limits
-            max_pips = 1000
-            min_pips = 1
-
-            if pip_distance > max_pips:
-                pip_distance = max_pips
-            elif pip_distance < min_pips:
-                pip_distance = min_pips
-
-            # Asset-specific minimums
-            if 'BTC' in symbol_upper:
-                min_pips = 50
-            elif 'ETH' in symbol_upper:
-                min_pips = 30
-            elif 'XAU' in symbol_upper:
-                min_pips = 100
-            else:
-                min_pips = 10
-
-            if pip_distance < min_pips:
-                pip_distance = min_pips
-
-            is_stop_loss = value < 0
-            if is_stop_loss:
-                if order_type.upper() == "BUY":
-                    return round(current_price - (pip_distance * point), digits)
-                else:  # SELL
-                    return round(current_price + (pip_distance * point), digits)
-            else:
-                if order_type.upper() == "BUY":
-                    return round(current_price + (pip_distance * point), digits)
-                else:  # SELL
-                    return round(current_price - (pip_distance * point), digits)
-
-        elif unit.lower() in ["equity%", "equity_percent"]:
-            if not account_info:
-                return 0.0
-
-            equity = account_info.equity
-            percentage_amount = equity * (abs_value / 100)
-
-            contract_size = getattr(symbol_info, 'trade_contract_size', 100000)
-            pip_value = lot_size * contract_size * point
-            if pip_value > 0:
-                pip_distance = percentage_amount / pip_value
-            else:
-                pip_distance = abs_value
-
-            is_sl = value < 0
-            if is_sl:
-                if order_type.upper() == "BUY":
-                    return round(current_price - (pip_distance * point), digits)
-                else:
-                    return round(current_price + (pip_distance * point), digits)
-            else:
-                if order_type.upper() == "BUY":
-                    return round(current_price + (pip_distance * point), digits)
-                else:
-                    return round(current_price - (pip_distance * point), digits)
-
+            percentage = abs(value)
+            # Percentage-based TP/SL calculation
+            if order_type.upper() == "BUY":
+                if value > 0:  # Take Profit
+                    return round(current_price * (1 + percentage / 100), digits)
+                else:  # Stop Loss
+                    return round(current_price * (1 - percentage / 100), digits)
+            else:  # SELL order
+                if value > 0:  # Take Profit
+                    return round(current_price * (1 - percentage / 100), digits)
+                else:  # Stop Loss
+                    return round(current_price * (1 + percentage / 100), digits)
+                    
+        elif unit.lower() in ["balance%", "equity%"]:
+            # Balance/Equity percentage mode
+            abs_value = abs(value)
+            if account_info:
+                base_amount = account_info.balance if "balance" in unit.lower() else account_info.equity
+                money_amount = base_amount * (abs_value / 100)
+                
+                # Calculate pip value for conversion
+                pip_value = calculate_pip_value(symbol, lot_size, current_price)
+                if pip_value > 0:
+                    pip_distance = money_amount / (pip_value * lot_size)
+                    
+                    if order_type.upper() == "BUY":
+                        if value > 0:  # Take Profit
+                            return round(current_price + pip_distance * point * 10, digits)
+                        else:  # Stop Loss
+                            return round(current_price - pip_distance * point * 10, digits)
+                    else:  # SELL
+                        if value > 0:  # Take Profit
+                            return round(current_price - pip_distance * point * 10, digits)
+                        else:  # Stop Loss
+                            return round(current_price + pip_distance * point * 10, digits)
+                            
         elif unit.lower() == "money":
-            money_amount = abs_value
-            pip_value = calculate_pip_value(symbol, lot_size) 
-            if pip_value <= 0:
-                pip_value = 10.0
-
-            pips_distance = money_amount / pip_value
-            distance = pips_distance * point * (10 if "JPY" in symbol else 10)
-
-        else:
-            return round(value, digits)
-
-        # Apply direction based on order type
-        if order_type.upper() == "BUY":
-            if is_tp:
-                target_price = current_price + distance
-            else:
-                target_price = current_price - distance
-        else:  # SELL
-            if is_tp:
-                target_price = current_price - distance
-            else:
-                target_price = current_price + distance
-
-        result = round(target_price, digits)
-        logger(f"💰 TP/SL Calc: {unit}={value} → Price={result:.{digits}f}")
-        return result
-
+            # Fixed money amount mode
+            money_amount = abs(value)
+            pip_value = calculate_pip_value(symbol, lot_size, current_price)
+            
+            if pip_value > 0:
+                pip_distance = money_amount / (pip_value * lot_size)
+                
+                if order_type.upper() == "BUY":
+                    if value > 0:  # Take Profit
+                        return round(current_price + pip_distance * point * 10, digits)
+                    else:  # Stop Loss
+                        return round(current_price - pip_distance * point * 10, digits)
+                else:  # SELL
+                    if value > 0:  # Take Profit
+                        return round(current_price - pip_distance * point * 10, digits)
+                    else:  # Stop Loss
+                        return round(current_price + pip_distance * point * 10, digits)
+        
+        logger(f"⚠️ Unsupported TP/SL unit: {unit}")
+        return 0.0
+        
     except Exception as e:
-        logger(f"❌ Error calculating TP/SL ({unit}): {str(e)}")
+        logger(f"❌ Error calculating TP/SL: {str(e)}")
         return 0.0
 
 
-def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0, 
-               sl_price: float = 0.0, comment: str = "Live Trade") -> bool:
-    """Execute REAL order on live MT5 account with retry mechanism"""
-    max_retries = 3
-    
-    for attempt in range(max_retries):
+def execute_trade_signal(symbol: str, action: str, lot_size: float, tp_value: str, sl_value: str, 
+                        tp_unit: str, sl_unit: str, strategy: str = "Manual") -> bool:
+    """Execute trading signal dengan enhanced safety checks dan professional systems integration"""
+    try:
+        logger(f"🎯 ENHANCED Execute trade: {action} {lot_size} lots {symbol}")
+        logger(f"   📊 TP: {tp_value} {tp_unit}, SL: {sl_value} {sl_unit}")
+        logger(f"   ⚙️ Strategy: {strategy}")
+
+        # 1. PRE-EXECUTION SAFETY CHECKS
+        # Economic calendar check
         try:
-            if not symbol or not action or lot_size <= 0:
-                logger(f"❌ Invalid order parameters: {symbol}, {action}, {lot_size}")
+            from economic_calendar import should_pause_for_news
+            if should_pause_for_news():
+                logger("⚠️ Trading paused due to high-impact news event")
                 return False
-
-            conditions_ok, message = validate_trading_conditions(symbol)
-            if not conditions_ok:
-                logger(f"❌ Trading conditions not met: {message}")
-                return False
-            
-            # Check MT5 connection before each attempt
-            if not mt5.account_info():
-                logger(f"⚠️ MT5 connection lost, attempt {attempt + 1}/{max_retries}")
-                if attempt < max_retries - 1:
-                    from mt5_connection import connect_mt5
-                    if connect_mt5():
-                        continue
-                    else:
-                        time.sleep(1)
-                        continue
-                else:
-                    return False
-
-            tick = mt5.symbol_info_tick(symbol)
-            if not tick:
-                logger(f"❌ Cannot get current tick for {symbol}")
-                return False
-
-            symbol_info = mt5.symbol_info(symbol)
-            if not symbol_info:
-                logger(f"❌ Cannot get symbol info for {symbol}")
-                return False
-
-            if action.upper() == "BUY":
-                order_type = mt5.ORDER_TYPE_BUY
-                price = tick.ask
-            elif action.upper() == "SELL":
-                order_type = mt5.ORDER_TYPE_SELL
-                price = tick.bid
-            else:
-                logger(f"❌ Invalid action: {action}")
-                return False
-
-            digits = symbol_info.digits
-            point = symbol_info.point
-
-            min_stops_level = getattr(symbol_info, 'trade_stops_level', 0) * point
-            if min_stops_level == 0:
-                min_stops_level = 10 * point
-
-            # Validate TP/SL distances for real trading
-            if action.upper() == "BUY":
-                if tp_price > 0:
-                    min_tp = price + min_stops_level
-                    if tp_price < min_tp:
-                        tp_price = round(min_tp, digits)
-                if sl_price > 0:
-                    max_sl = price - min_stops_level
-                    if sl_price > max_sl:
-                        sl_price = round(max_sl, digits)
-            else:  # SELL
-                if tp_price > 0:
-                    max_tp = price - min_stops_level
-                    if tp_price > max_tp:
-                        tp_price = round(max_tp, digits)
-                if sl_price > 0:
-                    min_sl = price + min_stops_level
-                    if sl_price < min_sl:
-                        sl_price = round(min_sl, digits)
-
-            filling_mode = getattr(symbol_info, 'filling_mode', 0)
-            if filling_mode & 2:
-                fill_type = mt5.ORDER_FILLING_IOC
-            elif filling_mode & 1:
-                fill_type = mt5.ORDER_FILLING_FOK
-            else:
-                fill_type = mt5.ORDER_FILLING_RETURN
-
-            request = {
-                "action": mt5.TRADE_ACTION_DEAL,
-                "symbol": symbol,
-                "volume": round(lot_size, 2),
-                "type": order_type,
-                "price": round(price, digits),
-                "sl": round(sl_price, digits) if sl_price > 0 else 0.0,
-                "tp": round(tp_price, digits) if tp_price > 0 else 0.0,
-                "deviation": 50,
-                "magic": 234000,
-                "comment": comment[:31] if comment else "LiveBot",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": fill_type,
-            }
-
-            logger(f"📤 LIVE ORDER: {action} {lot_size} {symbol} @ {price:.{digits}f}")
-            logger(f"   TP: {tp_price:.{digits}f} | SL: {sl_price:.{digits}f}")
-
-            # Send REAL order to live market
-            result = mt5.order_send(request)
-
-            if result is None:
-                logger("❌ Live order failed: No result returned")
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
-                return False
-
-            retcode = result.retcode if hasattr(result, 'retcode') else result.get('retcode', 0)
-
-            if retcode != mt5.TRADE_RETCODE_DONE:
-                comment = result.comment if hasattr(result, 'comment') else result.get('comment', 'Unknown error')
-                logger(f"❌ Live order failed: Code {retcode} - {comment}")
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
-                return False
-            else:
-                order = result.order if hasattr(result, 'order') else result.get('order', 0)
-                deal = result.deal if hasattr(result, 'deal') else result.get('deal', 0)
-                volume = result.volume if hasattr(result, 'volume') else result.get('volume', 0)
-                exec_price = result.price if hasattr(result, 'price') else result.get('price', 0)
-
-                logger(f"✅ LIVE ORDER EXECUTED!")
-                logger(f"   Order: #{order} | Deal: #{deal}")
-                logger(f"   Volume: {volume} | Price: {exec_price}")
-
-                # Update GUI
-                try:
-                    import __main__
-                    if hasattr(__main__, 'gui') and __main__.gui:
-                        __main__.gui.update_account_info()
-                        __main__.gui.update_positions()
-                except:
-                    pass
-
-                # Log to CSV
-                order_data = {
-                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'symbol': symbol,
-                    'action': action,
-                    'volume': lot_size,
-                    'price': exec_price,
-                    'tp': tp_price if tp_price > 0 else 0,
-                    'sl': sl_price if sl_price > 0 else 0,
-                    'comment': comment,
-                    'ticket': order,
-                    'profit': 0.0
-                }
-
-                log_order_csv("orders.csv", order_data)
-                return True
-
         except Exception as e:
-            logger(f"❌ Error executing live order (attempt {attempt + 1}): {str(e)}")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
+            logger(f"⚠️ Economic calendar check failed: {str(e)}")
+
+        # Drawdown manager check
+        try:
+            from drawdown_manager import get_recovery_adjustments
+            recovery_mode, adjusted_lot = get_recovery_adjustments(lot_size)
+            if recovery_mode:
+                logger(f"🔄 Recovery mode active - lot size adjusted: {lot_size} → {adjusted_lot}")
+                lot_size = adjusted_lot
+        except Exception as e:
+            logger(f"⚠️ Drawdown manager check failed: {str(e)}")
+
+        # Risk management checks
+        from risk_management import check_daily_limits, increment_daily_trade_count
+        if not check_daily_limits():
+            logger("🛑 Daily trading limits reached")
             return False
-    
-    return False
+
+        # Get current market data
+        current_tick = mt5.symbol_info_tick(symbol)
+        if not current_tick:
+            logger(f"❌ Cannot get current tick for {symbol}")
+            return False
+
+        current_bid = current_tick.bid
+        current_ask = current_tick.ask
+        current_price = current_bid if action == "SELL" else current_ask
+
+        logger(f"📊 Current prices: Bid={current_bid:.5f}, Ask={current_ask:.5f}")
+
+        # 2. DYNAMIC POSITION SIZING INTEGRATION
+        try:
+            from enhanced_position_sizing import get_dynamic_position_size
+            dynamic_lot = get_dynamic_position_size(symbol, strategy, lot_size)
+            if dynamic_lot != lot_size:
+                logger(f"🎯 Dynamic sizing: {lot_size} → {dynamic_lot}")
+                lot_size = dynamic_lot
+        except Exception as e:
+            logger(f"⚠️ Dynamic position sizing failed: {str(e)}")
+
+        # 3. CALCULATE TP/SL LEVELS
+        tp_price = 0.0
+        sl_price = 0.0
+
+        if tp_value and tp_value.strip() != "0":
+            tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
+            logger(f"🎯 Calculated TP: {tp_price:.5f}")
+
+        if sl_value and sl_value.strip() != "0":
+            sl_price = calculate_tp_sl_all_modes(sl_value, sl_unit, symbol, action, current_price, lot_size)
+            logger(f"🛡️ Calculated SL: {sl_price:.5f}")
+
+        # 4. PREPARE ORDER REQUEST
+        order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
+        
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": lot_size,
+            "type": order_type,
+            "price": current_price,
+            "tp": tp_price if tp_price > 0 else 0.0,
+            "sl": sl_price if sl_price > 0 else 0.0,
+            "comment": f"Enhanced {strategy}",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+        # 5. EXECUTE ORDER
+        logger(f"📤 Sending order request...")
+        result = mt5.order_send(request)
+
+        if not result:
+            logger("❌ Order send failed - no result")
+            return False
+
+        # 6. PROCESS RESULT
+        if hasattr(result, 'retcode') and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger(f"✅ Order executed successfully!")
+            logger(f"   📋 Order: {result.order}")
+            logger(f"   🎫 Deal: {result.deal}")
+            logger(f"   📊 Volume: {result.volume}")
+            logger(f"   💰 Price: {result.price}")
+
+            # 7. POST-EXECUTION ENHANCEMENTS
+            # Add trailing stop
+            try:
+                from trailing_stop_manager import add_trailing_stop_to_position
+                position_ticket = result.deal
+                add_trailing_stop_to_position(position_ticket, symbol, action)
+                logger(f"✅ Trailing stop added to position {position_ticket}")
+            except Exception as e:
+                logger(f"⚠️ Failed to add trailing stop: {str(e)}")
+
+            # Update performance tracking
+            try:
+                from performance_tracking import add_trade_to_tracking
+                add_trade_to_tracking(result, symbol, action, strategy)
+            except Exception as e:
+                logger(f"⚠️ Performance tracking failed: {str(e)}")
+
+            # Log to CSV
+            try:
+                log_order_csv(result, symbol, action)
+            except Exception as e:
+                logger(f"⚠️ CSV logging failed: {str(e)}")
+
+            # Increment counters
+            increment_daily_trade_count()
+
+            # Send notifications
+            try:
+                from telegram_notifications import notify_trade_executed
+                notify_trade_executed(symbol, action, lot_size, current_price, tp_price, sl_price, strategy)
+            except Exception as e:
+                logger(f"⚠️ Telegram notification failed: {str(e)}")
+
+            return True
+
+        else:
+            error_code = getattr(result, 'retcode', 'Unknown')
+            error_comment = getattr(result, 'comment', 'No details')
+            logger(f"❌ Order failed: Code {error_code} - {error_comment}")
+            return False
+
+    except Exception as e:
+        logger(f"❌ Execute trade error: {str(e)}")
+        return False
 
 
-def close_position_by_ticket(ticket: int) -> bool:
-    """Close specific live position"""
+def close_position(ticket: int) -> bool:
+    """Close specific position by ticket"""
     try:
         positions = mt5.positions_get(ticket=ticket)
         if not positions:
@@ -425,35 +310,37 @@ def close_position_by_ticket(ticket: int) -> bool:
             return False
 
         position = positions[0]
+        symbol = position.symbol
+        volume = position.volume
+        order_type = mt5.ORDER_TYPE_SELL if position.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
 
-        if position.type == 0:
-            order_type = mt5.ORDER_TYPE_SELL
-            price = mt5.symbol_info_tick(position.symbol).bid
-        else:
-            order_type = mt5.ORDER_TYPE_BUY
-            price = mt5.symbol_info_tick(position.symbol).ask
+        # Get current price
+        tick = mt5.symbol_info_tick(symbol)
+        if not tick:
+            logger(f"❌ Cannot get current price for {symbol}")
+            return False
 
+        price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
+
+        # Close request
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": position.symbol,
-            "volume": position.volume,
+            "symbol": symbol,
+            "volume": volume,
             "type": order_type,
             "position": ticket,
             "price": price,
-            "deviation": 20,
-            "magic": 234000,
-            "comment": f"Close #{ticket}",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "comment": "Position closed by bot",
         }
 
         result = mt5.order_send(request)
-
-        if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-            logger(f"✅ Live position {ticket} closed successfully")
+        
+        if result and hasattr(result, 'retcode') and result.retcode == mt5.TRADE_RETCODE_DONE:
+            logger(f"✅ Position {ticket} closed successfully")
             return True
         else:
-            logger(f"❌ Failed to close live position {ticket}")
+            error_msg = getattr(result, 'comment', 'Unknown error') if result else 'No result'
+            logger(f"❌ Failed to close position {ticket}: {error_msg}")
             return False
 
     except Exception as e:
@@ -461,259 +348,95 @@ def close_position_by_ticket(ticket: int) -> bool:
         return False
 
 
-def close_all_orders(symbol: str = None) -> None:
-    """Close all live positions"""
+def close_all_positions() -> int:
+    """Close all open positions"""
     try:
-        if symbol:
-            positions = mt5.positions_get(symbol=symbol)
-            logger(f"🔄 Closing all live positions for {symbol}")
-        else:
-            positions = mt5.positions_get()
-            logger("🔄 Closing ALL live positions")
-
+        positions = mt5.positions_get()
         if not positions:
-            logger("ℹ️ No live positions to close")
-            return
+            logger("ℹ️ No open positions to close")
+            return 0
 
         closed_count = 0
-        total_profit = 0.0
-
         for position in positions:
-            if close_position_by_ticket(position.ticket):
+            if close_position(position.ticket):
                 closed_count += 1
-                total_profit += position.profit
+                time.sleep(0.1)  # Small delay between closes
 
-        logger(f"✅ Closed {closed_count}/{len(positions)} live positions")
-        logger(f"💰 Total profit: ${total_profit:.2f}")
+        logger(f"✅ Closed {closed_count}/{len(positions)} positions")
+        return closed_count
 
     except Exception as e:
-        logger(f"❌ Error closing positions: {str(e)}")
+        logger(f"❌ Error closing all positions: {str(e)}")
+        return 0
 
 
-def execute_trade_signal(symbol: str, action: str) -> bool:
-    """Execute REAL trade signal with live money - ENHANCED FOR REAL TRADING"""
+def log_order_csv(order_result, symbol: str, action: str):
+    """Log order to CSV file for analysis"""
     try:
-        # SAFETY CHECK 1: Order limits
-        from risk_management import check_order_limit
-        if not check_order_limit():
-            logger("🛑 Order limit reached - skipping live trade")
-            return False
-        
-        # SAFETY CHECK 2: Economic calendar news check
-        if ECONOMIC_CALENDAR_AVAILABLE:
-            should_pause, pause_reason, event_info = should_pause_for_news(symbol)
-            if should_pause:
-                logger(f"📅 Trade paused for news: {pause_reason}")
-                return False
-        
-        # SAFETY CHECK 3: Drawdown recovery adjustments
-        recovery_adjustments = {}
-        if DRAWDOWN_MANAGER_AVAILABLE:
-            recovery_adjustments = get_recovery_adjustments()
-            if recovery_adjustments.get("pause_low_confidence", False):
-                # Additional validation for recovery mode
-                logger("⚠️ Recovery mode active - using conservative parameters")
+        import csv
+        import os
+        from datetime import datetime
 
-        current_strategy = "Scalping"
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                current_strategy = __main__.gui.current_strategy
-        except:
-            pass
-
-        params = DEFAULT_PARAMS.get(current_strategy, DEFAULT_PARAMS["Scalping"])
+        # Ensure csv_logs directory exists
+        os.makedirs("csv_logs", exist_ok=True)
         
-        # PROFESSIONAL UPGRADE: Dynamic Position Sizing
-        lot_size = float(params["lot_size"])  # Fallback default
+        csv_file = "csv_logs/orders.csv"
         
-        # Get initial prices for position sizing calculation
-        tick = mt5.symbol_info_tick(symbol)
-        if not tick:
-            logger(f"❌ Cannot get live price for {symbol}")
-            return False
+        # Check if file exists to decide on header
+        file_exists = os.path.exists(csv_file)
         
-        current_price = tick.ask if action.upper() == "BUY" else tick.bid
-        
-        # Get stop loss for position sizing calculation
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                gui_sl = __main__.gui.sl_entry.get()
-                if gui_sl and gui_sl.strip():
-                    sl_value_temp = gui_sl.strip()
-                else:
-                    sl_value_temp = params["sl_pips"]
-            else:
-                sl_value_temp = params["sl_pips"]
-        except:
-            sl_value_temp = params["sl_pips"]
-        
-        # Calculate stop loss price for dynamic sizing
-        sl_distance_pips = float(sl_value_temp) if str(sl_value_temp).replace('.', '').isdigit() else 10.0
-        
-        symbol_info = mt5.symbol_info(symbol)
-        if symbol_info:
-            point = getattr(symbol_info, 'point', 0.00001)
-            pip_multiplier = 10 if "JPY" in symbol else 10
-            sl_distance = sl_distance_pips * point * pip_multiplier
+        with open(csv_file, 'a', newline='') as file:
+            writer = csv.writer(file)
             
-            if action.upper() == "BUY":
-                estimated_sl_price = current_price - sl_distance
-            else:
-                estimated_sl_price = current_price + sl_distance
-        else:
-            estimated_sl_price = current_price * 0.99 if action.upper() == "BUY" else current_price * 1.01
+            # Write header if file doesn't exist
+            if not file_exists:
+                writer.writerow([
+                    'Timestamp', 'Symbol', 'Action', 'Volume', 'Price', 
+                    'TP', 'SL', 'Order', 'Deal', 'Retcode', 'Comment'
+                ])
+            
+            # Write order data
+            writer.writerow([
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                symbol,
+                action,
+                getattr(order_result, 'volume', 0),
+                getattr(order_result, 'price', 0),
+                getattr(order_result, 'tp', 0),  # This might not exist in result
+                getattr(order_result, 'sl', 0),  # This might not exist in result
+                getattr(order_result, 'order', 0),
+                getattr(order_result, 'deal', 0),
+                getattr(order_result, 'retcode', 0),
+                getattr(order_result, 'comment', '')
+            ])
+            
+        logger(f"📋 Order logged to CSV: {csv_file}")
         
-        # DYNAMIC POSITION SIZING CALCULATION WITH RECOVERY ADJUSTMENTS
-        if DYNAMIC_SIZING_AVAILABLE:
-            try:
-                dynamic_lot, sizing_details = get_dynamic_position_size(
-                    symbol=symbol,
-                    entry_price=current_price,
-                    stop_loss=estimated_sl_price,
-                    strategy=current_strategy
-                )
-                
-                if dynamic_lot > 0:
-                    lot_size = dynamic_lot
-                    
-                    # Apply recovery mode adjustments
-                    if recovery_adjustments and "lot_size_multiplier" in recovery_adjustments:
-                        lot_adjustment = recovery_adjustments["lot_size_multiplier"]
-                        lot_size = lot_size * lot_adjustment
-                        logger(f"⚡ Recovery mode: Lot size adjusted by {lot_adjustment:.2f}x")
-                    
-                    logger(f"💰 Final lot size: {lot_size} (Risk: {sizing_details.get('risk_percent', 0):.2f}%)")
-                    logger(f"   Sizing method: {sizing_details.get('method', 'Unknown')}")
-                else:
-                    logger(f"⚠️ Dynamic sizing returned invalid lot: {dynamic_lot}, using default")
-                    
-            except Exception as dyn_e:
-                logger(f"⚠️ Dynamic sizing error: {str(dyn_e)}, using default lot size")
-        
-        # GUI override (if user manually sets lot size)
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                gui_lot = __main__.gui.get_current_lot_size()
-                if gui_lot > 0:
-                    lot_size = gui_lot
-                    logger(f"🔧 GUI override: Using manual lot size {lot_size}")
-        except:
-            pass
-
-        tick = mt5.symbol_info_tick(symbol)
-        if not tick:
-            logger(f"❌ Cannot get live price for {symbol}")
-            return False
-
-        current_price = tick.ask if action.upper() == "BUY" else tick.bid
-
-        tp_value = str(params["tp_pips"])
-        sl_value = str(params["sl_pips"])
-        tp_unit = "pips"
-        sl_unit = "pips"
-
-        # Get GUI settings
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                gui_tp = __main__.gui.tp_entry.get()
-                gui_sl = __main__.gui.sl_entry.get()
-                gui_tp_unit = __main__.gui.tp_unit_combo.get()
-                gui_sl_unit = __main__.gui.sl_unit_combo.get()
-
-                unit_mapping = {
-                    "pips": "pips",
-                    "price": "price", 
-                    "percent": "percent",
-                    "percent (balance)": "balance%",
-                    "percent (equity)": "equity%",
-                    "balance%": "balance%",
-                    "equity%": "equity%",
-                    "money": "money"
-                }
-
-                if gui_tp and gui_tp.strip():
-                    tp_value = gui_tp.strip()
-                if gui_sl and gui_sl.strip():
-                    sl_value = gui_sl.strip()
-
-                if gui_tp_unit:
-                    tp_unit = unit_mapping.get(gui_tp_unit, gui_tp_unit)
-                if gui_sl_unit:
-                    sl_unit = unit_mapping.get(gui_sl_unit, gui_sl_unit)
-
-                logger(f"✅ Using GUI settings: TP={tp_value} {tp_unit}, SL={sl_value} {sl_unit}")
-        except Exception as e:
-            logger(f"⚠️ GUI settings error: {e}")
-
-        # Calculate TP/SL for REAL trading
-        tp_price = calculate_tp_sl_all_modes(tp_value, tp_unit, symbol, action, current_price, lot_size)
-        sl_price = calculate_tp_sl_all_modes(f"-{sl_value}", sl_unit, symbol, action, current_price, lot_size)
-
-        logger(f"🎯 Executing LIVE {action} signal for {symbol}")
-        logger(f"📋 Strategy: {current_strategy} | Lot: {lot_size}")
-        logger(f"📊 Entry: {current_price:.5f} | TP: {tp_price:.5f} | SL: {sl_price:.5f}")
-
-        # Execute REAL order with REAL money
-        success = open_order(
-            symbol=symbol,
-            action=action,
-            lot_size=lot_size,
-            tp_price=tp_price,
-            sl_price=sl_price,
-            comment=f"{current_strategy} LIVE"
-        )
-
-        if success:
-            logger(f"✅ LIVE {action} order executed successfully for {symbol}")
-            
-            # PROFESSIONAL ENHANCEMENTS POST-EXECUTION
-            
-            # 1. Add trailing stop if available
-            if TRAILING_STOPS_AVAILABLE:
-                try:
-                    # Get the position ticket from recent positions
-                    positions = mt5.positions_get(symbol=symbol)
-                    if positions:
-                        latest_position = positions[-1]  # Most recent position
-                        trail_config = {
-                            "trail_distance_pips": 20,
-                            "use_atr_based": True,
-                            "min_profit_pips": 10
-                        }
-                        add_trailing_stop_to_position(latest_position.ticket, symbol, trail_config)
-                        logger(f"📈 Trailing stop added to position {latest_position.ticket}")
-                except Exception as trail_e:
-                    logger(f"⚠️ Failed to add trailing stop: {str(trail_e)}")
-            
-            # 2. Track trade for drawdown analysis
-            if DRAWDOWN_MANAGER_AVAILABLE:
-                try:
-                    # Initial tracking (profit will be updated when closed)
-                    add_trade_to_tracking(symbol, action, 0.0, lot_size)
-                except Exception as track_e:
-                    logger(f"⚠️ Failed to track trade: {str(track_e)}")
-            
-            # 3. Log order to CSV
-            try:
-                log_order_csv(symbol, action, lot_size, current_price, tp_price, sl_price, "LiveSignal")
-            except Exception as csv_e:
-                logger(f"⚠️ CSV logging failed: {str(csv_e)}")
-            
-            # 4. Send Telegram notification
-            try:
-                notify_trade_executed(symbol, action, lot_size, current_price, tp_price, sl_price, current_strategy)
-            except Exception as telegram_error:
-                logger(f"⚠️ Telegram notification failed: {str(telegram_error)}")
-                
-        else:
-            logger(f"❌ Failed to execute LIVE {action} order for {symbol}")
-
-        return success
-
     except Exception as e:
-        logger(f"❌ Error executing live trade signal: {str(e)}")
+        logger(f"❌ Error logging to CSV: {str(e)}")
+
+
+# Ensure all required imports are available at module level
+def validate_trading_operations():
+    """Validate that all required components are available"""
+    try:
+        # Test imports
+        from risk_management import check_daily_limits
+        from economic_calendar import should_pause_for_news  
+        from drawdown_manager import get_recovery_adjustments
+        from enhanced_position_sizing import get_dynamic_position_size
+        from trailing_stop_manager import add_trailing_stop_to_position
+        from performance_tracking import add_trade_to_tracking
+        from telegram_notifications import notify_trade_executed
+        
+        logger("✅ All trading operations components validated")
+        return True
+        
+    except ImportError as e:
+        logger(f"⚠️ Trading operations validation failed: {str(e)}")
         return False
+
+
+# Initialize validation on import
+if __name__ != "__main__":
+    validate_trading_operations()

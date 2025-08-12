@@ -6,7 +6,7 @@ Risk management, position sizing, and trade limits - REAL ACCOUNT PROTECTION
 import datetime
 from typing import Dict, Any, Tuple, Optional
 from logger_utils import logger
-from config import MAX_RISK_PERCENTAGE, MAX_DAILY_TRADES, MAX_OPEN_POSITIONS, DEFAULT_MAX_ORDERS
+from config import MAX_RISK_PERCENTAGE, MAX_DAILY_TRADES, MAX_OPEN_POSITIONS, DEFAULT_MAX_ORDERS, MIN_MAX_ORDERS, MAX_MAX_ORDERS
 
 # SMART MT5 Connection - Real on Windows, Mock for Development
 try:
@@ -18,10 +18,42 @@ except ImportError:
 
 # Global risk tracking with thread safety
 import threading
+import time
 _risk_lock = threading.Lock()
 daily_trade_count = 0
 session_start_time = datetime.datetime.now().date()
 max_orders_limit = DEFAULT_MAX_ORDERS
+current_order_count = 0
+
+def get_order_limit_status() -> Dict[str, Any]:
+    """Get current order limit status"""
+    global current_order_count, max_orders_limit
+    
+    return {
+        "current_count": current_order_count,
+        "max_limit": max_orders_limit,
+        "percentage_used": (current_order_count / max(max_orders_limit, 1)) * 100,
+        "can_trade": current_order_count < max_orders_limit
+    }
+
+def reset_order_count():
+    """Reset order count to zero"""
+    global current_order_count
+    current_order_count = 0
+    logger("🔄 Order count reset to 0")
+
+def increment_order_count():
+    """Increment order count"""
+    global current_order_count
+    current_order_count += 1
+    logger(f"📊 Order count incremented to: {current_order_count}")
+
+def decrement_order_count():
+    """Decrement order count"""
+    global current_order_count
+    if current_order_count > 0:
+        current_order_count -= 1
+        logger(f"📊 Order count decremented to: {current_order_count}")
 
 
 def check_order_limit() -> bool:

@@ -480,38 +480,60 @@ class TradingBotGUI:
                 self.symbol_combo.set("XAUUSDm")
 
     def on_strategy_change(self, event=None):
-        """Handle strategy change with proper GUI integration"""
+        """Handle strategy change with proper GUI integration - ENHANCED"""
         try:
             self.current_strategy = self.strategy_combo.get()
-            self.log(f"⚙️ Strategy changed to: {self.current_strategy}")
+            
+            # Enhanced strategy display with proper identification
+            strategy_display_name = {
+                "Scalping": "📈 SCALPING Strategy",
+                "Intraday": "⏰ INTRADAY Strategy", 
+                "Arbitrage": "⚖️ ARBITRAGE Strategy",
+                "HFT": "⚡ HIGH FREQUENCY TRADING (HFT) Strategy"
+            }.get(self.current_strategy, f"🎯 {self.current_strategy} Strategy")
+            
+            self.log(f"⚙️ Strategy changed to: {strategy_display_name}")
 
             # Update parameters based on strategy
             params = DEFAULT_PARAMS.get(self.current_strategy, DEFAULT_PARAMS["Scalping"])
 
-            # Update GUI fields
+            # Update GUI fields with proper validation
             self.lot_entry.delete(0, tk.END)
             self.lot_entry.insert(0, params["lot_size"])
 
+            # TP/SL update with HFT-specific handling
+            if self.current_strategy == "HFT":
+                # HFT has smaller TP/SL values - ensure correct display
+                tp_val = params["tp_pips"]
+                sl_val = params["sl_pips"]
+                self.log(f"🔧 HFT Strategy detected - Using precise values: TP={tp_val}, SL={sl_val}")
+            else:
+                tp_val = params["tp_pips"]
+                sl_val = params["sl_pips"]
+
             self.tp_entry.delete(0, tk.END)
-            self.tp_entry.insert(0, params["tp_pips"])
+            self.tp_entry.insert(0, str(tp_val))
 
             self.sl_entry.delete(0, tk.END)
-            self.sl_entry.insert(0, params["sl_pips"])
+            self.sl_entry.insert(0, str(sl_val))
 
             self.tp_unit_combo.set(params["tp_unit"])
             self.sl_unit_combo.set(params["sl_unit"])
 
-            self.log(f"📊 Parameters updated for {self.current_strategy}")
-            self.log(f"   TP: {params['tp_pips']} {params['tp_unit']}")
-            self.log(f"   SL: {params['sl_pips']} {params['sl_unit']}")
-            self.log(f"   Lot: {params['lot_size']}")
+            # Enhanced logging with strategy-specific information
+            self.log(f"📊 {strategy_display_name} Parameters Updated:")
+            self.log(f"   💰 Lot Size: {params['lot_size']}")
+            self.log(f"   🎯 Take Profit: {tp_val} {params['tp_unit']}")
+            self.log(f"   🛡️ Stop Loss: {sl_val} {params['sl_unit']}")
+            self.log(f"   📊 Signal Threshold: {params.get('signal_threshold', 2)}")
+            self.log(f"   📏 Spread Range: {params.get('min_spread', 0)} - {params.get('max_spread', 5)} pips")
 
             # Send Telegram notification for strategy change
             try:
                 old_strategy = getattr(self, '_previous_strategy', 'None')
-                tp_text = f"{params['tp_pips']} {params['tp_unit']}"
-                sl_text = f"{params['sl_pips']} {params['sl_unit']}"
-                notify_strategy_change(old_strategy, self.current_strategy, tp_text, sl_text, params['lot_size'])
+                tp_text = f"{tp_val} {params['tp_unit']}"
+                sl_text = f"{sl_val} {params['sl_unit']}"
+                notify_strategy_change(old_strategy, strategy_display_name, tp_text, sl_text, params['lot_size'])
                 self._previous_strategy = self.current_strategy
             except Exception as e:
                 self.log(f"⚠️ Telegram strategy notification failed: {str(e)}")
@@ -1143,30 +1165,52 @@ class TradingBotGUI:
             self.log(f"❌ Error resetting order count: {str(e)}")
 
     def update_order_count_display(self):
-        """Update order count display in GUI"""
+        """Update order count display in GUI - ENHANCED"""
         try:
             from risk_management import get_order_limit_status
             status = get_order_limit_status()
             
             count_text = f"{status['current_count']}/{status['max_limit']}"
             
-            # Color code based on usage
+            # Color code based on usage with better visualization
             if status['percentage_used'] >= 90:
-                color = "red"
+                color = "#ff4444"  # Bright red for danger
+                status_icon = "🔴"
             elif status['percentage_used'] >= 70:
-                color = "orange"
+                color = "#ff8800"  # Orange for warning
+                status_icon = "🟡"
+            elif status['percentage_used'] >= 50:
+                color = "#ffcc00"  # Yellow for caution
+                status_icon = "🟡"
             else:
-                color = "green"
+                color = "#00aa00"  # Green for safe
+                status_icon = "🟢"
             
-            # Check if order_count_lbl exists, if not create it or use alternative
+            display_text = f"{status_icon} {count_text}"
+            
+            # Update GUI label
             if hasattr(self, 'order_count_lbl'):
-                self.order_count_lbl.config(text=count_text, foreground=color)
+                self.order_count_lbl.config(text=display_text, foreground=color)
+                
+                # Log significant changes
+                if status['percentage_used'] >= 80:
+                    self.log(f"⚠️ Order limit warning: {count_text} ({status['percentage_used']:.0f}% used)")
+                elif status['current_count'] == 0:
+                    self.log(f"✅ Order count reset: {count_text}")
             else:
-                # Log the count instead if label doesn't exist
-                logger(f"📊 Order Count: {count_text}")
+                # Fallback logging if label doesn't exist
+                logger(f"📊 Order Count: {display_text} ({status['percentage_used']:.0f}% used)")
+            
+            # Update max orders entry field to show current limit
+            if hasattr(self, 'max_orders_entry'):
+                current_entry = self.max_orders_entry.get()
+                if current_entry != str(status['max_limit']):
+                    self.max_orders_entry.delete(0, tk.END)
+                    self.max_orders_entry.insert(0, str(status['max_limit']))
             
         except Exception as e:
+            error_text = "❌ ERR"
             if hasattr(self, 'order_count_lbl'):
-                self.order_count_lbl.config(text="ERR", foreground="red")
-            else:
-                logger(f"❌ Order count update error: {str(e)}")
+                self.order_count_lbl.config(text=error_text, foreground="red")
+            logger(f"❌ Order count update error: {str(e)}")
+            self.log(f"❌ Order limit display error: {str(e)}")

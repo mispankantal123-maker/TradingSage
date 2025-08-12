@@ -39,14 +39,16 @@ DEFAULT_PARAMS = {
         "max_spread": 3.0
     },
     "HFT": {
-        "tp_pips": "5",
-        "sl_pips": "3",
+        "tp_pips": "5",  # HFT: Small TP for quick profits
+        "sl_pips": "3",  # HFT: Tight SL for risk control
         "tp_unit": "pips",
         "sl_unit": "pips",
         "lot_size": "0.01",
-        "signal_threshold": 3,
-        "min_spread": 0.2,
-        "max_spread": 2.0
+        "signal_threshold": 3,  # Higher threshold for HFT precision
+        "min_spread": 0.2,  # Very tight spread requirements
+        "max_spread": 2.0,  # Max spread for HFT
+        "display_name": "HIGH FREQUENCY TRADING (HFT)",
+        "description": "Ultra-fast micro movements trading with tight TP/SL"
     }
 }
 
