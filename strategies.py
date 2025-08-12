@@ -161,7 +161,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
 
             # SMART symbol type detection with realistic spread limits
             if any(metal in symbol.upper() for metal in ["XAU", "XAG", "GOLD", "SILVER"]):
-                max_allowed_spread = 150.0  # Gold/Silver - realistic for live trading
+                max_allowed_spread = 200.0  # Gold/Silver - more aggressive spread tolerance
                 symbol_type = "METALS"
             elif any(crypto in symbol.upper() for crypto in ["BTC", "ETH", "LTC", "XRP", "ADA", "DOT"]):
                 max_allowed_spread = 800.0  # Crypto spreads are wider

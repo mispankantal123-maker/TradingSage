@@ -31,14 +31,14 @@ class EconomicCalendar:
             "LOW": 1
         }
         
-        # Optimized settings for profit maximization
+        # Ultra-aggressive settings for maximum trading opportunities
         self.settings = {
             "avoid_high_impact": False,  # MORE TRADING OPPORTUNITIES
             "avoid_medium_impact": False,
-            "pause_minutes_before": 5,   # Reduced from 15
-            "pause_minutes_after": 10,   # Reduced from 30
+            "pause_minutes_before": 2,   # Very minimal pause
+            "pause_minutes_after": 3,    # Very minimal pause
             "monitored_currencies": ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD"],
-            "auto_pause_trading": False  # MAXIMIZE TRADING TIME
+            "auto_pause_trading": False  # MAXIMIZE TRADING TIME - disable news pause
         }
         
         # Fallback news schedule (UTC times)
