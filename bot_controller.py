@@ -255,56 +255,34 @@ def main_trading_loop() -> None:
 # --- Modified Functions for Robustness ---
 
 def start_bot_thread() -> bool:
-    """Start bot in separate thread with robust error handling"""
-    global bot_thread, is_running, recovery_thread
+    """Start bot thread with safety checks"""
+    global is_running, bot_thread
 
     try:
         if is_running:
             logger("⚠️ Bot already running")
+            return True
+
+        # Check MT5 connection
+        if not check_mt5_status():
+            logger("❌ MT5 not connected. Please connect first.")
             return False
 
-        # Multiple connection attempts with retry
-        max_retries = 3
-        connected = False
-        for attempt in range(max_retries):
-            if check_mt5_status():
-                connected = True
-                break
-
-            logger(f"🔄 MT5 connection attempt {attempt + 1}/{max_retries}")
-            time.sleep(2)
-
-            # Try to reconnect
-            from mt5_connection import connect_mt5
-            if connect_mt5():
-                connected = True
-                break
-        
-        if not connected:
-            logger("❌ MT5 connection failed after all retries")
-            return False
-
-        logger("🚀 Starting trading bot...")
+        logger("🚀 Starting trading bot thread...")
         is_running = True
 
-        # Create thread with proper error handling
-        bot_thread = threading.Thread(
-            target=safe_trading_loop, 
-            daemon=True,
-            name="TradingBot"
-        )
+        # Create and start thread
+        bot_thread = threading.Thread(target=main_trading_loop, daemon=True)
         bot_thread.start()
 
         # Verify thread started
-        time.sleep(0.5)
+        time.sleep(2)
         if bot_thread.is_alive():
-            logger("✅ Trading bot started successfully")
-            # Start the recovery monitor if not already running
-            if recovery_thread is None or not recovery_thread.is_alive():
-                start_auto_recovery_monitor()
+            logger("✅ Trading bot started successfully - ACTIVE TRADING MODE")
+            logger("🎯 Bot akan mulai menganalisis dan mengambil order")
             return True
         else:
-            logger("❌ Trading bot thread failed to start")
+            logger("❌ Bot thread failed to start")
             is_running = False
             return False
 
@@ -320,7 +298,7 @@ def safe_trading_loop():
 
     try:
         # Call the original bot_thread logic
-        main_trading_loop() 
+        main_trading_loop()
     except KeyboardInterrupt:
         logger("⚠️ Trading loop interrupted by user")
     except Exception as e:
@@ -340,7 +318,7 @@ def safe_trading_loop():
             if is_running and check_mt5_status():
                 logger("🔄 Restarting trading loop...")
                 # Recursively call safe_trading_loop to restart the process
-                safe_trading_loop() 
+                safe_trading_loop()
             else:
                 logger("❌ Recovery conditions not met, stopping bot.")
                 is_running = False # Ensure bot stops if recovery fails
@@ -364,7 +342,7 @@ def emergency_cleanup():
 
         # Close all positions if needed
         # Assuming emergency_close_all_positions is more specific for emergencies
-        emergency_close_all_positions() 
+        emergency_close_all_positions()
 
         # Reset counters
         reset_order_count()
@@ -388,12 +366,12 @@ def start_auto_recovery_monitor():
             try:
                 if is_running: # Check the global is_running flag
                     auto_recovery_check()
-                
+
                 # Add a condition to break if bot is stopped to prevent infinite loop
                 if not is_running:
                     logger("🛑 Recovery monitor stopping as bot is not running.")
                     break
-                    
+
                 time.sleep(30)  # Check every 30 seconds
             except Exception as e:
                 logger(f"❌ Recovery monitor error: {str(e)}")
@@ -438,13 +416,13 @@ def stop_bot():
     try:
         logger("🛑 Stopping trading bot...")
         is_running = False
-        
+
         # Wait for bot thread to finish
         if bot_thread and bot_thread.is_alive():
             bot_thread.join(timeout=5)
-        
+
         logger("✅ Trading bot stopped successfully")
-        
+
     except Exception as e:
         logger(f"❌ Error stopping bot: {str(e)}")
 
@@ -460,7 +438,7 @@ def emergency_stop_all():
 
         # Close all positions
         # Assuming emergency_cleanup already handles this, but can be called explicitly if needed
-        emergency_cleanup() 
+        emergency_cleanup()
 
         # Update GUI status if available
         try:
