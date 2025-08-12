@@ -87,6 +87,13 @@ class TrailingStopManager:
                 if not trail_config:
                     trail_config = self.default_config.copy()
                 
+                # Ensure all required keys exist
+                required_keys = ["trail_distance_pips", "trail_step_pips", "min_profit_pips", 
+                               "use_atr_based", "atr_multiplier", "max_trail_distance", "min_trail_distance"]
+                for key in required_keys:
+                    if key not in trail_config:
+                        trail_config[key] = self.default_config.get(key, 0)
+                
                 # Calculate ATR-based trailing distance if enabled
                 if trail_config.get("use_atr_based", True):
                     atr_distance = self._calculate_atr_trailing_distance(symbol, trail_config)

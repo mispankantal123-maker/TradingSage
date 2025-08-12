@@ -44,14 +44,33 @@ def ensure_log_directory() -> bool:
         return False
 
 
-def log_order_csv(filename: str, order: dict) -> None:
-    """Log order to CSV file with proper error handling"""
+def log_order_csv(filename: str, order: dict, symbol: str = None, action: str = None, 
+                  volume: float = None, price: float = None, comment: str = None) -> None:
+    """Log order to CSV file with proper error handling - supports both dict and individual parameters"""
     try:
         ensure_log_directory()
         filepath = os.path.join("csv_logs", filename)
         
         # Check if file exists to determine if header needed
         file_exists = os.path.exists(filepath)
+        
+        # Handle both dict and individual parameter calls
+        if isinstance(order, dict):
+            order_data = order
+        else:
+            # Legacy compatibility - construct dict from individual parameters
+            order_data = {
+                'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'symbol': symbol or order,  # order is actually symbol in legacy calls
+                'action': action or 'UNKNOWN',
+                'volume': volume or 0.0,
+                'price': price or 0.0,
+                'tp': 0.0,
+                'sl': 0.0,
+                'comment': comment or 'Legacy call',
+                'ticket': 0,
+                'profit': 0.0
+            }
         
         with open(filepath, 'a', newline='', encoding='utf-8') as csvfile:
             fieldnames = ['timestamp', 'symbol', 'action', 'volume', 'price', 
@@ -61,7 +80,7 @@ def log_order_csv(filename: str, order: dict) -> None:
             if not file_exists:
                 writer.writeheader()
                 
-            writer.writerow(order)
+            writer.writerow(order_data)
             
         logger(f"📝 Order logged to {filename}")
         

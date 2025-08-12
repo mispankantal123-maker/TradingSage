@@ -1118,8 +1118,16 @@ class TradingBotGUI:
                 color = "orange"
             else:
                 color = "green"
-                
-            self.order_count_lbl.config(text=count_text, foreground=color)
+            
+            # Check if order_count_lbl exists, if not create it or use alternative
+            if hasattr(self, 'order_count_lbl'):
+                self.order_count_lbl.config(text=count_text, foreground=color)
+            else:
+                # Log the count instead if label doesn't exist
+                logger(f"📊 Order Count: {count_text}")
             
         except Exception as e:
-            self.order_count_lbl.config(text="ERR", foreground="red")
+            if hasattr(self, 'order_count_lbl'):
+                self.order_count_lbl.config(text="ERR", foreground="red")
+            else:
+                logger(f"❌ Order count update error: {str(e)}")

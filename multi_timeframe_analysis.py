@@ -289,10 +289,16 @@ class MultiTimeframeAnalyzer:
             analysis['trend_strength'] = abs(trend_score) / 10.0 # Normalize trend score
 
             # Volume Confirmation (example: check if volume increased on last bullish candle)
-            if analysis['bias'] == 'BULLISH' and last['volume'] > df['volume'].iloc[-2] * 1.2:
-                analysis['volume_confirmation'] = True
-            elif analysis['bias'] == 'BEARISH' and last['volume'] > df['volume'].iloc[-2] * 1.2:
-                analysis['volume_confirmation'] = True # For bearish too, assuming significant volume
+            try:
+                if 'volume' in df.columns and not df['volume'].isna().all():
+                    if analysis['bias'] == 'BULLISH' and last['volume'] > df['volume'].iloc[-2] * 1.2:
+                        analysis['volume_confirmation'] = True
+                    elif analysis['bias'] == 'BEARISH' and last['volume'] > df['volume'].iloc[-2] * 1.2:
+                        analysis['volume_confirmation'] = True # For bearish too, assuming significant volume
+                else:
+                    analysis['volume_confirmation'] = False  # No volume data available
+            except (KeyError, IndexError):
+                analysis['volume_confirmation'] = False  # Volume data not available or insufficient
 
 
             # Calculate Confidence Score for this timeframe
