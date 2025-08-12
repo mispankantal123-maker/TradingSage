@@ -35,6 +35,9 @@ class TradingBotGUI:
         self.current_strategy = "Scalping"
         self._update_counter = 0
         self._last_update_time = datetime.datetime.now()
+        
+        # Initialize order count
+        self.order_count = 0
 
         # Create widgets
         self.create_widgets()
