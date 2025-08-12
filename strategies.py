@@ -31,14 +31,14 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
         try:
             from multi_timeframe_analysis import should_trade_based_on_mtf
             should_trade, mtf_direction, mtf_analysis = should_trade_based_on_mtf(symbol, strategy, min_confluence_score=65)
-            
+
             if not should_trade:
                 confluence_score = mtf_analysis.get('confluence_score', 0)
                 logger(f"⚠️ MTF Analysis: Confluence too low ({confluence_score:.1f}/100) - Skipping trade")
                 return None, [f"MTF confluence insufficient: {confluence_score:.1f}%"]
-            
+
             logger(f"✅ MTF Analysis: {mtf_direction} signal confirmed (Score: {mtf_analysis.get('confluence_score', 0):.1f}/100)")
-            
+
         except Exception as mtf_e:
             logger(f"⚠️ MTF analysis error, proceeding with single timeframe: {str(mtf_e)}")
             should_trade = True
@@ -111,7 +111,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                 symbol_type = "METALS"
             elif any(crypto in symbol.upper() for crypto in ["BTC", "ETH", "LTC", "XRP", "ADA", "DOT"]):
                 max_allowed_spread = 800.0  # Crypto spreads are wider
-                symbol_type = "CRYPTO"  
+                symbol_type = "CRYPTO"
             elif any(oil in symbol.upper() for oil in ["OIL", "WTI", "BRENT", "USOIL", "UKOIL"]):
                 max_allowed_spread = 30.0  # Oil commodities
                 symbol_type = "ENERGY"
@@ -149,7 +149,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
             spread_quality = "EXCELLENT"
             trade_confidence = 1.0
         elif spread_pips <= max_allowed_spread * 0.7:
-            spread_quality = "GOOD" 
+            spread_quality = "GOOD"
             trade_confidence = 0.8
         elif spread_pips <= max_allowed_spread:
             spread_quality = "ACCEPTABLE"
@@ -165,7 +165,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
             logger(f"⚠️ Extremely wide spread - reducing position size by 50%")
             spread_warning = True
         elif spread_pips > max_allowed_spread:
-            logger(f"⚠️ Wide spread - reducing position size by 25%") 
+            logger(f"⚠️ Wide spread - reducing position size by 25%")
             spread_warning = True
         else:
             spread_warning = False
@@ -222,7 +222,7 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         if last['EMA8'] < last['EMA20']:
             signals.append("EMA8 below EMA20 (Bearish trend)")
             sell_signals += 1
-            # ADDITIONAL: If EMA8 is also falling, give extra SELL weight  
+            # ADDITIONAL: If EMA8 is also falling, give extra SELL weight
             if last['EMA8'] < prev['EMA8']:
                 signals.append("EMA8 falling in downtrend (Strong bearish)")
                 sell_signals += 1  # Total +2 for strong downtrend
@@ -232,7 +232,7 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Price above EMA8 (Bullish price action)")
             buy_signals += 1
 
-        # CRITICAL: Additional SELL opportunities for price momentum  
+        # CRITICAL: Additional SELL opportunities for price momentum
         if last['close'] < last['EMA8']:
             signals.append("Price below EMA8 (Bearish price action)")
             sell_signals += 1
@@ -254,7 +254,7 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Bullish reversal candle pattern")
             buy_signals += 1
 
-        price_momentum_down = last['close'] < prev['close']  
+        price_momentum_down = last['close'] < prev['close']
         price_momentum_accelerating_down = (prev['close'] - last['close']) > (df.iloc[-3]['close'] - prev['close']) if len(df) > 3 else price_momentum_down
 
         if price_momentum_down:
@@ -275,14 +275,14 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("RSI in bullish zone and rising")
             buy_signals += 1
         elif last['RSI'] > 45 and rsi_rising:  # Lowered threshold
-            signals.append("RSI above 45 and rising")  
+            signals.append("RSI above 45 and rising")
             buy_signals += 1
         # ADDITIONAL: RSI oversold bounce
         elif last['RSI'] < 35 and rsi_rising:
             signals.append("RSI oversold bounce opportunity")
             buy_signals += 2  # Strong BUY signal
 
-        # RSI SELL conditions  
+        # RSI SELL conditions
         if rsi_bearish_zone and rsi_falling:
             signals.append("RSI in bearish zone and falling")
             sell_signals += 1
@@ -336,7 +336,7 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Price in lower BB range but rising")
             buy_signals += 1
 
-        # BB SELL conditions  
+        # BB SELL conditions
         if last['close'] < bb_middle:
             signals.append("Price below BB middle band")
             sell_signals += 1
@@ -358,14 +358,14 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             action = "BUY"
             logger(f"🟢 SCALPING STRONG BUY for {symbol}: {buy_signals} buy vs {sell_signals} sell")
         elif sell_signals >= buy_signals + 3:
-            action = "SELL" 
+            action = "SELL"
             logger(f"🔴 SCALPING STRONG SELL for {symbol}: {sell_signals} sell vs {buy_signals} buy")
         # Medium signals (1-2 difference)
         elif buy_signals > sell_signals and buy_signals >= signal_threshold:
             action = "BUY"
             logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
         elif sell_signals > buy_signals and sell_signals >= signal_threshold:
-            action = "SELL" 
+            action = "SELL"
             logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
         # Equal signals - use multiple tiebreakers
         elif buy_signals == sell_signals and buy_signals >= signal_threshold:
