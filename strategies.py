@@ -38,6 +38,22 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                     logger(f"✅ ENHANCED ANALYSIS: {enhanced_result['signal']} signal (Confidence: {confidence:.1%})")
                     logger(f"   🔍 Reason: {enhanced_result.get('reason', 'N/A')}")
 
+                    # Check XAU/USD specific analysis
+                    if symbol.upper() in ['XAUUSD', 'GOLD']:
+                        try:
+                            from enhanced_xauusd_analyzer import get_xauusd_professional_analysis
+                            xau_analysis = get_xauusd_professional_analysis(symbol)
+                            
+                            if xau_analysis.get('trading_decision') in ['BULLISH', 'BEARISH']:
+                                xau_signal = 'BUY' if xau_analysis['trading_decision'] == 'BULLISH' else 'SELL'
+                                if xau_signal == enhanced_result['signal']:
+                                    logger(f"✅ XAU/USD CONFLUENCE: Professional analysis confirms {xau_signal}")
+                                    return xau_signal, [f"XAU/USD professional analysis + Enhanced engine confluence"]
+                                else:
+                                    logger(f"⚠️ XAU/USD CONFLICT: Professional analysis suggests {xau_analysis['trading_decision']}")
+                        except Exception as xau_e:
+                            logger(f"⚠️ XAU/USD analysis error: {str(xau_e)}")
+
                     # Use enhanced analysis result
                     return enhanced_result["signal"], [enhanced_result.get("reason", "Enhanced analysis signal")]
                 else:
@@ -59,6 +75,23 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                 return None, [f"MTF confluence insufficient: {confluence_score:.1f}%"]
 
             logger(f"✅ MTF Analysis: {mtf_direction} signal confirmed (Score: {mtf_analysis.get('confluence_score', 0):.1f}/100)")
+
+            # Apply DXY correlation filter for better signal quality
+            if symbol.upper() in ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY']:
+                try:
+                    from dxy_correlation_analyzer import apply_dxy_correlation_filter
+                    dxy_filtered = apply_dxy_correlation_filter(symbol, mtf_direction, 0.8)
+                    
+                    if dxy_filtered['dxy_filter'] == 'CONFIRMS':
+                        logger(f"✅ DXY CONFLUENCE: Correlation analysis confirms {mtf_direction}")
+                        # Boost confidence with DXY confirmation
+                    elif dxy_filtered['dxy_filter'] == 'CONTRADICTS':
+                        logger(f"⚠️ DXY CONFLICT: Correlation analysis contradicts signal")
+                        # Reduce confidence or skip trade
+                        if dxy_filtered['filtered_confidence'] < 0.6:
+                            return None, ["DXY correlation conflict - signal rejected"]
+                except Exception as dxy_e:
+                    logger(f"⚠️ DXY correlation analysis error: {str(dxy_e)}")
 
         except Exception as mtf_e:
             logger(f"⚠️ MTF analysis error, proceeding with single timeframe: {str(mtf_e)}")

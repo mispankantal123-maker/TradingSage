@@ -1,12 +1,13 @@
-# --- Drawdown Recovery Manager Module ---
+# --- Drawdown Manager Module ---
 """
-Adaptive drawdown recovery system untuk real trading
-Smart risk reduction dan recovery strategies saat losing streaks
+Professional drawdown management untuk capital preservation
+Implements emergency stops, correlation monitoring, dan recovery protocols
 """
 
-import time
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List, Tuple
+import pandas as pd
+import numpy as np
+import datetime
+from typing import Dict, Any, List, Optional
 from logger_utils import logger
 
 # Smart MT5 connection
@@ -19,523 +20,405 @@ except ImportError:
 
 
 class DrawdownManager:
-    """Professional drawdown recovery system"""
+    """Professional drawdown management untuk 2 miliar profit protection"""
     
     def __init__(self):
-        self.initial_balance = 0.0
-        self.peak_equity = 0.0
-        self.current_drawdown_pct = 0.0
-        self.max_historical_dd = 0.0
-        self.recovery_mode = False
-        self.recovery_start_time = None
-        
-        # Drawdown thresholds
-        self.dd_thresholds = {
-            "warning": 5.0,      # 5% warning level
-            "caution": 10.0,     # 10% caution level  
-            "danger": 15.0,      # 15% danger level
-            "emergency": 20.0    # 20% emergency stop
+        # Drawdown thresholds per strategy
+        self.strategy_thresholds = {
+            'Scalping': {
+                'daily_dd_limit': 0.05,      # 5% daily drawdown limit
+                'weekly_dd_limit': 0.10,     # 10% weekly drawdown limit
+                'consecutive_losses': 5,      # Stop after 5 consecutive losses
+                'recovery_multiplier': 1.5    # Position size reduction during recovery
+            },
+            'Intraday': {
+                'daily_dd_limit': 0.08,
+                'weekly_dd_limit': 0.15,
+                'consecutive_losses': 4,
+                'recovery_multiplier': 1.3
+            },
+            'HFT': {
+                'daily_dd_limit': 0.03,      # Tighter control for HFT
+                'weekly_dd_limit': 0.06,
+                'consecutive_losses': 8,      # More trades = more losses allowed
+                'recovery_multiplier': 2.0
+            },
+            'Arbitrage': {
+                'daily_dd_limit': 0.10,
+                'weekly_dd_limit': 0.20,
+                'consecutive_losses': 3,
+                'recovery_multiplier': 1.2
+            }
         }
         
-        # Recovery settings
-        self.recovery_settings = {
-            "reduce_lot_size_pct": 50,        # Reduce lot size by 50%
-            "reduce_max_positions": 50,       # Reduce max positions by 50%
-            "increase_signal_threshold": 2,   # Require stronger signals
-            "pause_low_conf_signals": True,   # Pause low confidence signals
-            "enable_conservative_mode": True, # Switch to conservative parameters
-            "recovery_target_pct": 5.0,       # Recover 5% before normal mode
-            "max_recovery_days": 7            # Max 7 days in recovery mode
+        # Global emergency thresholds
+        self.emergency_thresholds = {
+            'total_dd_limit': 0.20,         # 20% total portfolio drawdown
+            'correlation_spike_limit': 0.85, # Stop if correlation > 85%
+            'volatility_spike_multiplier': 3.0, # Stop if volatility > 3x normal
+            'news_event_pause_hours': 2     # Hours to pause after major news
         }
         
-        # Performance tracking
-        self.daily_results = []
-        self.trade_results = []
-        self.last_analysis = None
+        # Track performance metrics
+        self.performance_history = []
+        self.loss_streak = 0
+        self.last_trade_result = None
+        self.daily_pnl = 0
+        self.weekly_pnl = 0
         
-    def initialize_balance(self):
-        """Initialize starting balance and equity tracking"""
+    def check_trading_allowed(self, strategy: str, symbol: str = None) -> Dict[str, Any]:
+        """Check if trading is allowed based on drawdown analysis"""
         try:
-            account = mt5.account_info()
-            if account:
-                self.initial_balance = account.balance
-                self.peak_equity = account.equity
-                
-                logger(f"💰 Drawdown manager initialized: Balance=${self.initial_balance:.2f}")
-                
-                return True
-            else:
-                logger("❌ Cannot get account info for drawdown manager")
-                return False
-                
-        except Exception as e:
-            logger(f"❌ Error initializing drawdown manager: {str(e)}")
-            return False
-    
-    def update_drawdown_status(self) -> Dict[str, Any]:
-        """Update current drawdown status"""
-        try:
-            account = mt5.account_info()
-            if not account:
-                return {"error": "Cannot get account info"}
+            logger(f"🛡️ Drawdown check for {strategy} - {symbol or 'ALL'}")
             
-            current_equity = account.equity
-            current_balance = account.balance
+            # Get current account status
+            account_info = mt5.account_info()
+            if not account_info:
+                return self._create_block_response("No account info available", "TECHNICAL")
             
-            # Update peak equity
-            if current_equity > self.peak_equity:
-                self.peak_equity = current_equity
-                
-                # Exit recovery mode if we've recovered sufficiently
-                if self.recovery_mode:
-                    recovery_pct = ((current_equity - self.recovery_start_equity) / self.recovery_start_equity) * 100
-                    if recovery_pct >= self.recovery_settings["recovery_target_pct"]:
-                        self._exit_recovery_mode()
+            # Check emergency stops first
+            emergency_check = self._check_emergency_stops(account_info)
+            if not emergency_check['allowed']:
+                return emergency_check
             
-            # Calculate current drawdown
-            if self.peak_equity > 0:
-                self.current_drawdown_pct = ((self.peak_equity - current_equity) / self.peak_equity) * 100
-            else:
-                self.current_drawdown_pct = 0.0
+            # Check strategy-specific limits
+            strategy_check = self._check_strategy_limits(strategy, account_info)
+            if not strategy_check['allowed']:
+                return strategy_check
             
-            # Update max historical drawdown
-            if self.current_drawdown_pct > self.max_historical_dd:
-                self.max_historical_dd = self.current_drawdown_pct
+            # Check correlation risk
+            correlation_check = self._check_correlation_risk(symbol)
+            if not correlation_check['allowed']:
+                return correlation_check
             
-            # Determine risk level
-            risk_level = self._get_risk_level()
+            # Check volatility spikes
+            volatility_check = self._check_volatility_spikes(symbol)
+            if not volatility_check['allowed']:
+                return volatility_check
             
-            # Check if we need to enter recovery mode
-            if not self.recovery_mode and self.current_drawdown_pct >= self.dd_thresholds["caution"]:
-                self._enter_recovery_mode()
-            
-            # Emergency stop check
-            if self.current_drawdown_pct >= self.dd_thresholds["emergency"]:
-                self._trigger_emergency_stop()
-            
-            # Prepare status
-            status = {
-                "current_equity": current_equity,
-                "current_balance": current_balance,
-                "peak_equity": self.peak_equity,
-                "current_drawdown_pct": round(self.current_drawdown_pct, 2),
-                "max_historical_dd": round(self.max_historical_dd, 2),
-                "risk_level": risk_level,
-                "recovery_mode": self.recovery_mode,
-                "thresholds": self.dd_thresholds
+            # All checks passed
+            return {
+                'allowed': True,
+                'reason': 'All drawdown checks passed',
+                'risk_level': 'NORMAL',
+                'position_size_multiplier': 1.0,
+                'additional_checks': {
+                    'emergency': emergency_check,
+                    'strategy': strategy_check,
+                    'correlation': correlation_check,
+                    'volatility': volatility_check
+                }
             }
             
-            # Add recovery info if in recovery mode
-            if self.recovery_mode:
-                status["recovery_info"] = self._get_recovery_info()
-            
-            return status
-            
         except Exception as e:
-            logger(f"❌ Error updating drawdown status: {str(e)}")
-            return {"error": str(e)}
-    
-    def _get_risk_level(self) -> str:
-        """Determine current risk level based on drawdown"""
-        if self.current_drawdown_pct >= self.dd_thresholds["emergency"]:
-            return "EMERGENCY"
-        elif self.current_drawdown_pct >= self.dd_thresholds["danger"]:
-            return "DANGER"
-        elif self.current_drawdown_pct >= self.dd_thresholds["caution"]:
-            return "CAUTION"
-        elif self.current_drawdown_pct >= self.dd_thresholds["warning"]:
-            return "WARNING"
-        else:
-            return "NORMAL"
-    
-    def _enter_recovery_mode(self):
-        """Enter drawdown recovery mode"""
+            logger(f"❌ Drawdown check error: {str(e)}")
+            return self._create_block_response(f"Drawdown check error: {str(e)}", "ERROR")
+
+    def _check_emergency_stops(self, account_info) -> Dict[str, Any]:
+        """Check emergency stop conditions"""
         try:
-            if self.recovery_mode:
-                return
+            # Calculate total drawdown from peak equity
+            equity = account_info.equity
+            balance = account_info.balance
             
-            self.recovery_mode = True
-            self.recovery_start_time = datetime.now()
-            
-            account = mt5.account_info()
-            if account:
-                self.recovery_start_equity = account.equity
-            
-            logger(f"🚨 ENTERING RECOVERY MODE - Drawdown: {self.current_drawdown_pct:.2f}%")
-            logger(f"   Conservative parameters activated")
-            logger(f"   Lot sizes reduced by {self.recovery_settings['reduce_lot_size_pct']}%")
-            logger(f"   Signal threshold increased")
-            
-            # Notify trading system
-            self._notify_recovery_mode_change(True)
-            
-            # Telegram notification
-            try:
-                from telegram_notifications import notify_drawdown_alert
-                notify_drawdown_alert(self.current_drawdown_pct, "RECOVERY_MODE_ENTERED")
-            except:
-                pass
+            # Calculate floating P&L percentage
+            if balance > 0:
+                floating_pnl_pct = (equity - balance) / balance
+                total_dd_pct = min(0, floating_pnl_pct)  # Only negative values
                 
+                if abs(total_dd_pct) >= self.emergency_thresholds['total_dd_limit']:
+                    return self._create_block_response(
+                        f"Emergency stop: Total drawdown {abs(total_dd_pct):.1%} >= {self.emergency_thresholds['total_dd_limit']:.1%}",
+                        "EMERGENCY"
+                    )
+            
+            # Check for margin level
+            if hasattr(account_info, 'margin_level') and account_info.margin_level < 200:
+                return self._create_block_response(
+                    f"Emergency stop: Low margin level {account_info.margin_level:.1f}%",
+                    "MARGIN"
+                )
+            
+            return {'allowed': True, 'emergency_level': 'NONE'}
+            
         except Exception as e:
-            logger(f"❌ Error entering recovery mode: {str(e)}")
-    
-    def _exit_recovery_mode(self):
-        """Exit drawdown recovery mode"""
+            logger(f"❌ Emergency stop check error: {str(e)}")
+            return self._create_block_response("Emergency check failed", "ERROR")
+
+    def _check_strategy_limits(self, strategy: str, account_info) -> Dict[str, Any]:
+        """Check strategy-specific drawdown limits"""
         try:
-            if not self.recovery_mode:
-                return
+            strategy_limits = self.strategy_thresholds.get(strategy, self.strategy_thresholds['Scalping'])
             
-            recovery_duration = (datetime.now() - self.recovery_start_time).total_seconds() / 3600  # hours
+            # Check daily drawdown
+            daily_dd = self._calculate_daily_drawdown(account_info)
+            if abs(daily_dd) >= strategy_limits['daily_dd_limit']:
+                return self._create_block_response(
+                    f"Daily drawdown limit reached: {abs(daily_dd):.1%} >= {strategy_limits['daily_dd_limit']:.1%}",
+                    "DAILY_LIMIT"
+                )
             
-            self.recovery_mode = False
-            self.recovery_start_time = None
+            # Check weekly drawdown
+            weekly_dd = self._calculate_weekly_drawdown(account_info)
+            if abs(weekly_dd) >= strategy_limits['weekly_dd_limit']:
+                return self._create_block_response(
+                    f"Weekly drawdown limit reached: {abs(weekly_dd):.1%} >= {strategy_limits['weekly_dd_limit']:.1%}",
+                    "WEEKLY_LIMIT"
+                )
             
-            logger(f"✅ EXITING RECOVERY MODE - Recovery successful!")
-            logger(f"   Recovery duration: {recovery_duration:.1f} hours")
-            logger(f"   Normal parameters restored")
+            # Check consecutive losses
+            if self.loss_streak >= strategy_limits['consecutive_losses']:
+                return self._create_block_response(
+                    f"Consecutive loss limit reached: {self.loss_streak} >= {strategy_limits['consecutive_losses']}",
+                    "LOSS_STREAK"
+                )
             
-            # Notify trading system
-            self._notify_recovery_mode_change(False)
+            # Calculate position size adjustment for recovery
+            position_multiplier = 1.0
+            if self.loss_streak > 0:
+                position_multiplier = 1.0 / strategy_limits['recovery_multiplier']
             
-            # Telegram notification
-            try:
-                from telegram_notifications import notify_drawdown_alert
-                notify_drawdown_alert(self.current_drawdown_pct, "RECOVERY_MODE_EXITED")
-            except:
-                pass
-                
+            return {
+                'allowed': True,
+                'position_size_multiplier': position_multiplier,
+                'daily_dd': daily_dd,
+                'weekly_dd': weekly_dd,
+                'loss_streak': self.loss_streak
+            }
+            
         except Exception as e:
-            logger(f"❌ Error exiting recovery mode: {str(e)}")
-    
-    def _trigger_emergency_stop(self):
-        """Trigger emergency stop for extreme drawdown"""
+            logger(f"❌ Strategy limit check error: {str(e)}")
+            return self._create_block_response("Strategy check failed", "ERROR")
+
+    def _check_correlation_risk(self, symbol: str) -> Dict[str, Any]:
+        """Check correlation risk across open positions"""
         try:
-            logger(f"🚨 EMERGENCY STOP TRIGGERED - Drawdown: {self.current_drawdown_pct:.2f}%")
-            logger(f"   All trading operations halted")
+            if not symbol:
+                return {'allowed': True, 'correlation_risk': 'LOW'}
             
-            # Stop all trading
-            try:
-                from bot_controller import emergency_stop_all
-                emergency_stop_all()
-            except:
-                pass
-            
-            # Close all positions (optional - configurable)
-            if self.recovery_settings.get("close_all_on_emergency", False):
-                self._close_all_positions()
-            
-            # Emergency notification
-            try:
-                from telegram_notifications import notify_emergency_stop
-                notify_emergency_stop(self.current_drawdown_pct, "DRAWDOWN_EMERGENCY")
-            except:
-                pass
-                
-        except Exception as e:
-            logger(f"❌ Error triggering emergency stop: {str(e)}")
-    
-    def _close_all_positions(self):
-        """Close all open positions (emergency measure)"""
-        try:
+            # Get current positions
             positions = mt5.positions_get()
-            if not positions:
-                return
+            if not positions or len(positions) == 0:
+                return {'allowed': True, 'correlation_risk': 'NONE'}
             
-            closed_count = 0
-            for position in positions:
-                try:
-                    # Prepare close request
-                    if position.type == mt5.ORDER_TYPE_BUY:
-                        order_type = mt5.ORDER_TYPE_SELL
-                        price = mt5.symbol_info_tick(position.symbol).bid
-                    else:
-                        order_type = mt5.ORDER_TYPE_BUY
-                        price = mt5.symbol_info_tick(position.symbol).ask
-                    
-                    request = {
-                        "action": mt5.TRADE_ACTION_DEAL,
-                        "symbol": position.symbol,
-                        "volume": position.volume,
-                        "type": order_type,
-                        "position": position.ticket,
-                        "price": price,
-                        "deviation": 50,
-                        "magic": 234000,
-                        "comment": "Emergency Close"
-                    }
-                    
-                    result = mt5.order_send(request)
-                    if result and result.retcode == mt5.TRADE_RETCODE_DONE:
-                        closed_count += 1
-                        logger(f"🔴 Emergency closed position {position.ticket}")
-                    
-                except Exception as pos_e:
-                    logger(f"❌ Error closing position {position.ticket}: {str(pos_e)}")
+            # Calculate currency exposure
+            currency_exposure = {}
+            base_currency = symbol[:3]
+            quote_currency = symbol[3:6]
             
-            logger(f"🚨 Emergency close completed: {closed_count} positions closed")
+            for pos in positions:
+                pos_base = pos.symbol[:3]
+                pos_quote = pos.symbol[3:6]
+                
+                # Count exposure by currency
+                currency_exposure[pos_base] = currency_exposure.get(pos_base, 0) + pos.volume
+                currency_exposure[pos_quote] = currency_exposure.get(pos_quote, 0) - pos.volume
+            
+            # Check if adding this trade would create excessive exposure
+            total_base_exposure = currency_exposure.get(base_currency, 0)
+            total_quote_exposure = currency_exposure.get(quote_currency, 0)
+            
+            max_single_currency_exposure = 5.0  # Max 5 lots exposure to single currency
+            
+            if (abs(total_base_exposure) >= max_single_currency_exposure or 
+                abs(total_quote_exposure) >= max_single_currency_exposure):
+                return self._create_block_response(
+                    f"High correlation risk: Currency exposure limit reached",
+                    "CORRELATION"
+                )
+            
+            return {'allowed': True, 'correlation_risk': 'NORMAL'}
             
         except Exception as e:
-            logger(f"❌ Error closing all positions: {str(e)}")
-    
-    def get_recovery_adjustments(self) -> Dict[str, Any]:
-        """Get current recovery mode adjustments"""
+            logger(f"❌ Correlation check error: {str(e)}")
+            return {'allowed': True, 'correlation_risk': 'UNKNOWN'}
+
+    def _check_volatility_spikes(self, symbol: str) -> Dict[str, Any]:
+        """Check for extreme volatility conditions"""
         try:
-            if not self.recovery_mode:
-                return {
-                    "lot_size_multiplier": 1.0,
-                    "max_positions_multiplier": 1.0,
-                    "signal_threshold_adjustment": 0,
-                    "conservative_mode": False
-                }
+            if not symbol:
+                return {'allowed': True, 'volatility_risk': 'UNKNOWN'}
             
-            # Calculate recovery adjustments
-            recovery_days = (datetime.now() - self.recovery_start_time).total_seconds() / (24 * 3600)
+            # Get recent data
+            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M15, 0, 50)
+            if rates is None or len(rates) < 20:
+                return {'allowed': True, 'volatility_risk': 'NO_DATA'}
             
-            # Progressive recovery - more conservative if longer in recovery
-            if recovery_days > self.recovery_settings["max_recovery_days"]:
-                # Force exit if too long in recovery
-                self._exit_recovery_mode()
-                return self.get_recovery_adjustments()
+            df = pd.DataFrame(rates)
             
-            # Adjust conservatism based on drawdown severity
-            dd_severity = min(self.current_drawdown_pct / self.dd_thresholds["danger"], 1.0)
+            # Calculate current vs historical volatility
+            current_range = (df['high'].tail(5).max() - df['low'].tail(5).min()) / df['close'].tail(5).mean()
+            historical_range = (df['high'].max() - df['low'].min()) / df['close'].mean()
             
-            lot_reduction = self.recovery_settings["reduce_lot_size_pct"] * dd_severity / 100
-            position_reduction = self.recovery_settings["reduce_max_positions"] * dd_severity / 100
+            volatility_ratio = current_range / historical_range if historical_range > 0 else 1.0
             
-            adjustments = {
-                "lot_size_multiplier": 1.0 - lot_reduction,
-                "max_positions_multiplier": 1.0 - position_reduction,
-                "signal_threshold_adjustment": int(self.recovery_settings["increase_signal_threshold"] * dd_severity),
-                "conservative_mode": True,
-                "pause_low_confidence": self.recovery_settings["pause_low_conf_signals"],
-                "recovery_progress": self._calculate_recovery_progress()
+            if volatility_ratio >= self.emergency_thresholds['volatility_spike_multiplier']:
+                return self._create_block_response(
+                    f"Volatility spike detected: {volatility_ratio:.1f}x normal levels",
+                    "VOLATILITY"
+                )
+            
+            return {
+                'allowed': True, 
+                'volatility_risk': 'NORMAL',
+                'volatility_ratio': volatility_ratio
             }
             
-            return adjustments
-            
         except Exception as e:
-            logger(f"❌ Error getting recovery adjustments: {str(e)}")
-            return {"error": str(e)}
-    
-    def _calculate_recovery_progress(self) -> float:
-        """Calculate recovery progress percentage"""
+            logger(f"❌ Volatility check error: {str(e)}")
+            return {'allowed': True, 'volatility_risk': 'ERROR'}
+
+    def _calculate_daily_drawdown(self, account_info) -> float:
+        """Calculate current daily drawdown"""
         try:
-            if not self.recovery_mode or not hasattr(self, 'recovery_start_equity'):
-                return 0.0
+            # This is simplified - in real implementation, you'd track daily starting equity
+            # For now, use a rough estimate based on current equity vs balance
+            equity = account_info.equity
+            balance = account_info.balance
             
-            account = mt5.account_info()
-            if not account:
-                return 0.0
-            
-            current_equity = account.equity
-            target_equity = self.recovery_start_equity * (1 + self.recovery_settings["recovery_target_pct"] / 100)
-            
-            if current_equity >= target_equity:
-                return 100.0
-            
-            recovery_needed = target_equity - self.recovery_start_equity
-            recovery_achieved = current_equity - self.recovery_start_equity
-            
-            if recovery_needed <= 0:
-                return 100.0
-            
-            progress = (recovery_achieved / recovery_needed) * 100
-            return max(0.0, min(100.0, progress))
-            
-        except Exception as e:
-            logger(f"❌ Error calculating recovery progress: {str(e)}")
+            # Estimate daily drawdown (this should be improved with proper tracking)
+            if balance > 0:
+                return (equity - balance) / balance
             return 0.0
-    
-    def _get_recovery_info(self) -> Dict[str, Any]:
-        """Get detailed recovery mode information"""
-        try:
-            recovery_duration = (datetime.now() - self.recovery_start_time).total_seconds() / 3600
             
-            info = {
-                "start_time": self.recovery_start_time.isoformat(),
-                "duration_hours": round(recovery_duration, 1),
-                "progress_pct": round(self._calculate_recovery_progress(), 1),
-                "adjustments": self.get_recovery_adjustments(),
-                "target_recovery_pct": self.recovery_settings["recovery_target_pct"],
-                "max_duration_days": self.recovery_settings["max_recovery_days"]
+        except Exception as e:
+            logger(f"❌ Daily drawdown calculation error: {str(e)}")
+            return 0.0
+
+    def _calculate_weekly_drawdown(self, account_info) -> float:
+        """Calculate current weekly drawdown"""
+        try:
+            # Simplified calculation - should be improved with historical tracking
+            return self._calculate_daily_drawdown(account_info) * 1.5  # Rough estimate
+        except Exception as e:
+            logger(f"❌ Weekly drawdown calculation error: {str(e)}")
+            return 0.0
+
+    def record_trade_result(self, symbol: str, strategy: str, pnl: float, 
+                          lot_size: float, trade_type: str) -> None:
+        """Record trade result for drawdown tracking"""
+        try:
+            trade_record = {
+                'timestamp': datetime.datetime.now(),
+                'symbol': symbol,
+                'strategy': strategy,
+                'pnl': pnl,
+                'lot_size': lot_size,
+                'trade_type': trade_type
             }
             
-            return info
+            self.performance_history.append(trade_record)
             
-        except Exception as e:
-            logger(f"❌ Error getting recovery info: {str(e)}")
-            return {"error": str(e)}
-    
-    def _notify_recovery_mode_change(self, entering: bool):
-        """Notify other systems about recovery mode change"""
-        try:
-            # Notify bot controller
-            try:
-                import bot_controller
-                if hasattr(bot_controller, 'set_recovery_mode'):
-                    bot_controller.set_recovery_mode(entering)
-            except:
-                pass
+            # Update loss streak
+            if pnl < 0:
+                self.loss_streak += 1
+                logger(f"📉 Loss recorded: {pnl:.2f} | Loss streak: {self.loss_streak}")
+            else:
+                if self.loss_streak > 0:
+                    logger(f"🔄 Loss streak broken after {self.loss_streak} losses")
+                self.loss_streak = 0
+                logger(f"📈 Profit recorded: {pnl:.2f}")
             
-            # Notify GUI
-            try:
-                import __main__
-                if hasattr(__main__, 'gui') and __main__.gui:
-                    __main__.gui.update_recovery_status(entering, self.current_drawdown_pct)
-            except:
-                pass
+            self.last_trade_result = pnl
+            self.daily_pnl += pnl
+            self.weekly_pnl += pnl
+            
+            # Keep only last 1000 trades in memory
+            if len(self.performance_history) > 1000:
+                self.performance_history = self.performance_history[-1000:]
                 
         except Exception as e:
-            logger(f"⚠️ Error notifying recovery mode change: {str(e)}")
-    
-    def add_trade_result(self, symbol: str, action: str, profit: float, lot_size: float):
-        """Add trade result for performance tracking"""
+            logger(f"❌ Trade result recording error: {str(e)}")
+
+    def get_recovery_recommendations(self, strategy: str) -> Dict[str, Any]:
+        """Get recommendations for recovery after drawdown"""
         try:
-            trade_result = {
-                "timestamp": datetime.now(),
-                "symbol": symbol,
-                "action": action,
-                "profit": profit,
-                "lot_size": lot_size,
-                "recovery_mode": self.recovery_mode
+            if self.loss_streak == 0:
+                return {'in_recovery': False, 'recommendations': []}
+            
+            recommendations = []
+            
+            # Position size reduction
+            strategy_params = self.strategy_thresholds.get(strategy, self.strategy_thresholds['Scalping'])
+            size_reduction = 1.0 / strategy_params['recovery_multiplier']
+            recommendations.append(f"Reduce position size by {(1-size_reduction)*100:.0f}%")
+            
+            # Strategy adjustments
+            if self.loss_streak >= 3:
+                recommendations.append("Consider switching to lower-frequency strategy")
+                recommendations.append("Increase confirmation requirements")
+            
+            if self.loss_streak >= 5:
+                recommendations.append("Take trading break for market reassessment")
+                recommendations.append("Review and optimize strategy parameters")
+            
+            return {
+                'in_recovery': True,
+                'loss_streak': self.loss_streak,
+                'position_size_multiplier': size_reduction,
+                'recommendations': recommendations
             }
             
-            self.trade_results.append(trade_result)
-            
-            # Keep only last 100 trades
-            if len(self.trade_results) > 100:
-                self.trade_results = self.trade_results[-100:]
-            
-            # Update daily results
-            self._update_daily_results()
-            
         except Exception as e:
-            logger(f"❌ Error adding trade result: {str(e)}")
-    
-    def _update_daily_results(self):
-        """Update daily performance results"""
+            logger(f"❌ Recovery recommendations error: {str(e)}")
+            return {'in_recovery': False, 'error': str(e)}
+
+    def _create_block_response(self, reason: str, block_type: str) -> Dict[str, Any]:
+        """Create a standardized block response"""
+        return {
+            'allowed': False,
+            'reason': reason,
+            'block_type': block_type,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'position_size_multiplier': 0.0
+        }
+
+    def get_current_risk_status(self) -> Dict[str, Any]:
+        """Get current risk status summary"""
         try:
-            today = datetime.now().date()
+            account_info = mt5.account_info()
+            if not account_info:
+                return {'status': 'ERROR', 'reason': 'No account info'}
             
-            # Calculate today's results
-            today_trades = [t for t in self.trade_results if t["timestamp"].date() == today]
-            
-            if today_trades:
-                daily_profit = sum(t["profit"] for t in today_trades)
-                daily_trades_count = len(today_trades)
-                winning_trades = len([t for t in today_trades if t["profit"] > 0])
-                win_rate = (winning_trades / daily_trades_count) * 100 if daily_trades_count > 0 else 0
-                
-                daily_result = {
-                    "date": today,
-                    "profit": daily_profit,
-                    "trades_count": daily_trades_count,
-                    "win_rate": win_rate,
-                    "recovery_mode": self.recovery_mode
-                }
-                
-                # Update or add today's result
-                for i, result in enumerate(self.daily_results):
-                    if result["date"] == today:
-                        self.daily_results[i] = daily_result
-                        return
-                
-                self.daily_results.append(daily_result)
-                
-                # Keep only last 30 days
-                if len(self.daily_results) > 30:
-                    self.daily_results = self.daily_results[-30:]
-            
-        except Exception as e:
-            logger(f"❌ Error updating daily results: {str(e)}")
-    
-    def get_performance_summary(self) -> Dict[str, Any]:
-        """Get performance summary and analysis"""
-        try:
-            account = mt5.account_info()
-            if not account:
-                return {"error": "Cannot get account info"}
-            
-            # Recent performance (last 7 days)
-            recent_results = [r for r in self.daily_results if 
-                            (datetime.now().date() - r["date"]).days <= 7]
-            
-            # Calculate metrics
-            total_profit = sum(r["profit"] for r in recent_results)
-            total_trades = sum(r["trades_count"] for r in recent_results)
-            avg_win_rate = sum(r["win_rate"] for r in recent_results) / len(recent_results) if recent_results else 0
-            
-            summary = {
-                "current_status": self.update_drawdown_status(),
-                "performance_7d": {
-                    "total_profit": round(total_profit, 2),
-                    "total_trades": total_trades,
-                    "avg_win_rate": round(avg_win_rate, 1),
-                    "daily_results": recent_results
-                },
-                "recovery_active": self.recovery_mode,
-                "max_historical_dd": round(self.max_historical_dd, 2)
+            return {
+                'status': 'ACTIVE' if self.loss_streak < 3 else 'CAUTION' if self.loss_streak < 5 else 'RECOVERY',
+                'loss_streak': self.loss_streak,
+                'daily_pnl': self.daily_pnl,
+                'weekly_pnl': self.weekly_pnl,
+                'equity': account_info.equity,
+                'balance': account_info.balance,
+                'free_margin': getattr(account_info, 'margin_free', 0),
+                'margin_level': getattr(account_info, 'margin_level', 0),
+                'total_trades_today': len([t for t in self.performance_history 
+                                         if t['timestamp'].date() == datetime.date.today()])
             }
             
-            if self.recovery_mode:
-                summary["recovery_info"] = self._get_recovery_info()
-            
-            return summary
-            
         except Exception as e:
-            logger(f"❌ Error getting performance summary: {str(e)}")
-            return {"error": str(e)}
-    
-    def update_settings(self, new_settings: Dict[str, Any]):
-        """Update drawdown manager settings"""
-        try:
-            if "thresholds" in new_settings:
-                self.dd_thresholds.update(new_settings["thresholds"])
-            
-            if "recovery_settings" in new_settings:
-                self.recovery_settings.update(new_settings["recovery_settings"])
-            
-            logger("✅ Drawdown manager settings updated")
-            
-        except Exception as e:
-            logger(f"❌ Error updating drawdown settings: {str(e)}")
+            logger(f"❌ Risk status error: {str(e)}")
+            return {'status': 'ERROR', 'reason': str(e)}
 
 
 # Global instance
 drawdown_manager = DrawdownManager()
 
 
-def initialize_drawdown_tracking():
-    """Initialize drawdown tracking system"""
-    return drawdown_manager.initialize_balance()
+def check_drawdown_limits(strategy: str, symbol: str = None) -> Dict[str, Any]:
+    """Check if trading is allowed based on drawdown limits"""
+    return drawdown_manager.check_trading_allowed(strategy, symbol)
 
 
-def get_current_drawdown_status() -> Dict[str, Any]:
-    """Get current drawdown status"""
-    return drawdown_manager.update_drawdown_status()
+def record_trade_outcome(symbol: str, strategy: str, pnl: float, 
+                        lot_size: float, trade_type: str) -> None:
+    """Record trade outcome for drawdown tracking"""
+    drawdown_manager.record_trade_result(symbol, strategy, pnl, lot_size, trade_type)
 
 
-def get_recovery_adjustments() -> Dict[str, Any]:
-    """Get recovery mode adjustments for trading"""
-    return drawdown_manager.get_recovery_adjustments()
-
-
-def add_trade_to_tracking(symbol: str, action: str, profit: float, lot_size: float):
-    """Add trade result to performance tracking"""
-    drawdown_manager.add_trade_result(symbol, action, profit, lot_size)
-
-
-def get_performance_analysis() -> Dict[str, Any]:
-    """Get comprehensive performance analysis"""
-    return drawdown_manager.get_performance_summary()
-
-
-def is_recovery_mode_active() -> bool:
-    """Check if recovery mode is currently active"""
-    return drawdown_manager.recovery_mode
-
-
-def configure_drawdown_settings(settings: Dict[str, Any]):
-    """Configure drawdown manager settings"""
-    drawdown_manager.update_settings(settings)
+def get_risk_adjusted_position_size(base_size: float, strategy: str) -> float:
+    """Get risk-adjusted position size based on current drawdown"""
+    try:
+        recovery_info = drawdown_manager.get_recovery_recommendations(strategy)
+        if recovery_info['in_recovery']:
+            return base_size * recovery_info['position_size_multiplier']
+        return base_size
+    except:
+        return base_size

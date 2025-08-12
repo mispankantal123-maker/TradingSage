@@ -322,19 +322,40 @@ def recognize_chart_patterns(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def analyze_support_resistance(df: pd.DataFrame) -> Dict[str, Any]:
-    """Analyze support and resistance levels"""
+    """Enhanced support/resistance analysis with robust fallback"""
     try:
-        from indicators import calculate_support_resistance
-
         bullish_score = 0
         bearish_score = 0
         signals = []
 
-        sr_levels = calculate_support_resistance(df)
-        current_price = sr_levels['current_price']
+        # Try professional S/R calculation first
+        try:
+            from indicators import calculate_support_resistance
+            sr_levels = calculate_support_resistance(df)
+            current_price = sr_levels['current_price']
+            resistance_levels = sr_levels.get('resistance', [])
+            support_levels = sr_levels.get('support', [])
+        except Exception as sr_error:
+            logger(f"⚠️ Professional S/R failed, using robust fallback: {str(sr_error)}")
+            # Robust fallback calculation
+            current_price = df['close'].iloc[-1]
+            resistance_levels = []
+            support_levels = []
+            
+            # Find swing highs (resistance)
+            for i in range(10, len(df) - 10):
+                window = df.iloc[i-10:i+11]
+                if df.iloc[i]['high'] == window['high'].max():
+                    resistance_levels.append(df.iloc[i]['high'])
+            
+            # Find swing lows (support)
+            for i in range(10, len(df) - 10):
+                window = df.iloc[i-10:i+11]
+                if df.iloc[i]['low'] == window['low'].min():
+                    support_levels.append(df.iloc[i]['low'])
 
-        # Check proximity to support/resistance
-        for resistance in sr_levels['resistance']:
+        # Analyze proximity to resistance levels
+        for resistance in resistance_levels[-5:]:  # Last 5 resistance levels
             distance_pct = abs(current_price - resistance) / current_price
             if distance_pct < 0.005:  # Within 0.5%
                 if current_price > resistance:
@@ -344,7 +365,8 @@ def analyze_support_resistance(df: pd.DataFrame) -> Dict[str, Any]:
                     bearish_score += 0.5
                     signals.append(f"Approaching resistance at {resistance:.5f}")
 
-        for support in sr_levels['support']:
+        # Analyze proximity to support levels
+        for support in support_levels[-5:]:  # Last 5 support levels
             distance_pct = abs(current_price - support) / current_price
             if distance_pct < 0.005:  # Within 0.5%
                 if current_price < support:
