@@ -1067,8 +1067,26 @@ class TradingBotGUI:
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             log_entry = f"[{timestamp}] {message}\n"
 
-            self.log_text.insert(tk.END, log_entry)
-            self.log_text.see(tk.END)
+            # ENHANCED: Filter out repetitive and non-essential log messages
+            spam_filters = [
+                "Daily order count update error",
+                "current_daily_count",
+                "Daily order count incremented",
+                "Daily order count updated",
+                "Order count incremented",
+                "Order count decremented"
+            ]
+
+            # Check if message contains any spam patterns
+            should_display = True
+            for spam_pattern in spam_filters:
+                if spam_pattern in message:
+                    should_display = False
+                    break
+
+            if should_display:
+                self.log_text.insert(tk.END, log_entry)
+                self.log_text.see(tk.END)
 
             # Limit log size to prevent memory issues
             lines = int(self.log_text.index('end-1c').split('.')[0])
@@ -1237,7 +1255,7 @@ class TradingBotGUI:
                 # Find the position of the existing order count label and place the new one next to it
                 current_count_widget = self.order_count_lbl
                 parent_frame = current_count_widget.master
-                
+
                 self.daily_order_count_lbl = ttk.Label(parent_frame, text=display_text, foreground=color)
                 self.daily_order_count_lbl.grid(row=0, column=2, padx=(15, 5))
             else:

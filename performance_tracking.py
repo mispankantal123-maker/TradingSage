@@ -233,11 +233,24 @@ def calculate_win_rate() -> Dict[str, float]:
 
 
 def add_trade_to_tracking(symbol: str, action: str, profit: float, lot_size: float):
-    """Add trade result to performance tracking and drawdown management"""
+    """Add trade result to performance tracking and drawdown management - FIXED VERSION"""
     try:
-        # Ensure profit is a float
+        # FIXED: Ensure all parameters are properly typed
         if isinstance(profit, str):
-            profit = float(profit)
+            try:
+                profit = float(profit)
+            except ValueError:
+                profit = 0.0
+        elif not isinstance(profit, (int, float)):
+            profit = 0.0
+            
+        if isinstance(lot_size, str):
+            try:
+                lot_size = float(lot_size)
+            except ValueError:
+                lot_size = 0.01
+        elif not isinstance(lot_size, (int, float)):
+            lot_size = 0.01
 
         # Track in performance system
         track_trade_performance(symbol, action, 0.0, profit=profit)
@@ -247,14 +260,17 @@ def add_trade_to_tracking(symbol: str, action: str, profit: float, lot_size: flo
             from drawdown_manager import add_trade_result
             add_trade_result(symbol, action, profit, lot_size)
         except ImportError:
-            pass  # Silently skip if not available
+            logger("⚠️ Drawdown manager not available for trade tracking")
+        except Exception as dm_e:
+            logger(f"⚠️ Drawdown tracking error: {str(dm_e)}")
 
-        logger(f"📊 Trade tracked: {symbol} {action} P&L: ${profit:.2f}")
+        # FIXED: Safe string formatting
+        logger(f"📊 Trade tracked: {symbol} {action} P&L: ${float(profit):.2f}")
 
     except Exception as e:
         logger(f"❌ Error adding trade to tracking: {str(e)}")
         import traceback
-        logger(f"Traceback: {traceback.format_exc()}")
+        logger(f"📝 Traceback: {traceback.format_exc()}")
 
 
 def get_daily_summary() -> Dict[str, Any]:

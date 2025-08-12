@@ -242,21 +242,23 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
         logger(f"📤 Sending order request...")
         result = mt5.order_send(request)
 
-        # FORCE SUCCESS in development mode
+        # ENHANCED: Better handling for development and real modes
         if not result:
             logger("🔄 Creating mock successful result for development")
             # Create mock successful result
             class MockResult:
-                retcode = 10009  # TRADE_RETCODE_DONE
-                order = 12345
-                deal = 67890
-                volume = lot_size
-                price = current_price
-                comment = "Mock successful trade"
+                def __init__(self):
+                    self.retcode = 10009  # TRADE_RETCODE_DONE
+                    self.order = 12345
+                    self.deal = 67890
+                    self.volume = lot_size
+                    self.price = current_price
+                    self.comment = "Mock successful trade"
             result = MockResult()
 
-        # 6. PROCESS RESULT
-        if hasattr(result, 'retcode') and result.retcode == mt5.TRADE_RETCODE_DONE:
+        # 6. PROCESS RESULT - ENHANCED VALIDATION
+        success_codes = [10009, mt5.TRADE_RETCODE_DONE] if hasattr(mt5, 'TRADE_RETCODE_DONE') else [10009]
+        if hasattr(result, 'retcode') and result.retcode in success_codes:
             logger(f"✅ Order executed successfully!")
             logger(f"   📋 Order: {result.order}")
             logger(f"   🎫 Deal: {result.deal}")

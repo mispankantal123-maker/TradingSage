@@ -427,7 +427,7 @@ def calculate_position_size(symbol: str, risk_amount: float, stop_loss_pips: flo
 
 
 def get_current_risk_metrics() -> Dict[str, Any]:
-    """Get current risk metrics from REAL account"""
+    """Get current risk metrics from REAL account - FIXED VERSION"""
     try:
         account_info = mt5.account_info()
         positions = mt5.positions_get()
@@ -437,24 +437,50 @@ def get_current_risk_metrics() -> Dict[str, Any]:
 
         position_count = len(positions) if positions else 0
 
-        # Calculate total risk
+        # Calculate total risk with proper type handling
         total_risk = 0.0
         if positions:
             for pos in positions:
-                if pos.sl > 0:  # Has stop loss
-                    risk = abs(pos.price_open - pos.sl) * pos.volume
-                    total_risk += risk
+                try:
+                    if hasattr(pos, 'sl') and pos.sl > 0:  # Has stop loss
+                        # FIXED: Ensure all values are numeric
+                        price_open = float(pos.price_open)
+                        stop_loss = float(pos.sl)
+                        volume = float(pos.volume)
+                        
+                        risk = abs(price_open - stop_loss) * volume
+                        total_risk += risk
+                except (ValueError, TypeError, AttributeError) as pos_e:
+                    logger(f"⚠️ Position risk calculation error: {str(pos_e)}")
+                    continue
 
-        risk_percentage = (total_risk / account_info.balance) * 100 if account_info.balance > 0 else 0
+        # FIXED: Proper type conversion and validation
+        balance = float(account_info.balance) if account_info.balance else 0.0
+        equity = float(account_info.equity) if account_info.equity else 0.0
+        margin = float(account_info.margin) if account_info.margin else 0.0
+        
+        risk_percentage = (total_risk / balance * 100) if balance > 0 else 0.0
+        margin_level = (equity / margin * 100) if margin > 0 else 0.0
+
+        # Calculate daily profit safely
+        global daily_profit
+        if not isinstance(daily_profit, (int, float)):
+            daily_profit = 0.0
+            
+        daily_profit_pct = (daily_profit / balance * 100) if balance > 0 else 0.0
+        equity_ratio = (equity / balance * 100) if balance > 0 else 100.0
 
         return {
-            'balance': account_info.balance,
-            'equity': account_info.equity,
-            'margin': account_info.margin,
-            'free_margin': account_info.margin_free,
-            'margin_level': (account_info.equity / account_info.margin * 100) if account_info.margin > 0 else 0,
+            'balance': balance,
+            'equity': equity,
+            'margin': margin,
+            'free_margin': float(account_info.margin_free) if account_info.margin_free else 0.0,
+            'margin_level': margin_level,
             'open_positions': position_count,
             'daily_trades': daily_trade_count,
+            'daily_profit': daily_profit,
+            'daily_profit_pct': daily_profit_pct,
+            'equity_ratio': equity_ratio,
             'total_risk': total_risk,
             'risk_percentage': risk_percentage,
             'max_positions': MAX_OPEN_POSITIONS,
@@ -464,7 +490,15 @@ def get_current_risk_metrics() -> Dict[str, Any]:
 
     except Exception as e:
         logger(f"❌ Error getting risk metrics: {str(e)}")
-        return {'error': str(e)}
+        import traceback
+        logger(f"📝 Risk metrics traceback: {traceback.format_exc()}")
+        return {
+            'error': str(e),
+            'balance': 0.0,
+            'equity': 0.0,
+            'daily_trades': 0,
+            'open_positions': 0
+        }
 
 
 def auto_recovery_check() -> bool:
