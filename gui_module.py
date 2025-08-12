@@ -36,7 +36,7 @@ class TradingBotGUI:
         self._update_counter = 0
         self._last_update_time = datetime.datetime.now()
         self._shutdown_in_progress = False
-        
+
         # Initialize order count
         self.order_count = 0
 
@@ -199,27 +199,27 @@ class TradingBotGUI:
 
         # Row 3: Order Limit Controls (NEW)
         ttk.Label(params_frame, text="Max Orders:").grid(row=3, column=0, sticky="w", padx=(0,3))
-        
+
         # Order limit frame
         order_limit_frame = ttk.Frame(params_frame)
         order_limit_frame.grid(row=3, column=1, padx=(0, 10), sticky="w")
-        
+
         self.max_orders_entry = ttk.Entry(order_limit_frame, width=4)
         self.max_orders_entry.insert(0, "10")
         self.max_orders_entry.grid(row=0, column=0, padx=(0, 2))
-        
+
         self.set_limit_btn = ttk.Button(order_limit_frame, text="Set", command=self.set_order_limit, width=4)
         self.set_limit_btn.grid(row=0, column=1)
-        
+
         # Order count and reset
         ttk.Label(params_frame, text="Order Count:").grid(row=3, column=2, sticky="w", padx=(0,3))
-        
+
         count_reset_frame = ttk.Frame(params_frame)
         count_reset_frame.grid(row=3, column=3, padx=(0, 5), sticky="w")
-        
+
         self.order_count_lbl = ttk.Label(count_reset_frame, text="0/10", foreground="blue")
         self.order_count_lbl.grid(row=0, column=0, padx=(0, 5))
-        
+
         self.reset_count_btn = ttk.Button(count_reset_frame, text="Reset", command=self.reset_order_count, width=5)
         self.reset_count_btn.grid(row=0, column=1)
 
@@ -483,15 +483,15 @@ class TradingBotGUI:
         """Handle strategy change with proper GUI integration - ENHANCED"""
         try:
             self.current_strategy = self.strategy_combo.get()
-            
+
             # Enhanced strategy display with proper identification
             strategy_display_name = {
                 "Scalping": "📈 SCALPING Strategy",
-                "Intraday": "⏰ INTRADAY Strategy", 
+                "Intraday": "⏰ INTRADAY Strategy",
                 "Arbitrage": "⚖️ ARBITRAGE Strategy",
                 "HFT": "⚡ HIGH FREQUENCY TRADING (HFT) Strategy"
             }.get(self.current_strategy, f"🎯 {self.current_strategy} Strategy")
-            
+
             self.log(f"⚙️ Strategy changed to: {strategy_display_name}")
 
             # Update parameters based on strategy
@@ -915,11 +915,14 @@ class TradingBotGUI:
             # Update account information
             self.update_account_info()
 
-            # Update positions
+            # Update positions display
             self.update_positions()
-            
+
             # Update order count display
             self.update_order_count_display()
+
+            # Update daily order count display
+            self.update_daily_order_count_display()
 
             # Log performance update periodically
             if self._update_counter % 20 == 0:
@@ -1060,7 +1063,7 @@ class TradingBotGUI:
                 # GUI is destroyed, fallback to console
                 print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
                 return
-                
+
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             log_entry = f"[{timestamp}] {message}\n"
 
@@ -1084,7 +1087,7 @@ class TradingBotGUI:
         try:
             # Stop logging to GUI immediately
             self._shutdown_in_progress = True
-            
+
             # Log to console instead during shutdown
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🔄 Shutting down trading bot...")
 
@@ -1137,7 +1140,7 @@ class TradingBotGUI:
         """Set new order limit from GUI input"""
         try:
             new_limit = int(self.max_orders_entry.get())
-            
+
             from risk_management import set_max_orders_limit
             if set_max_orders_limit(new_limit):
                 self.log(f"✅ Order limit set to: {new_limit}")
@@ -1148,7 +1151,7 @@ class TradingBotGUI:
                 from risk_management import max_orders_limit
                 self.max_orders_entry.delete(0, tk.END)
                 self.max_orders_entry.insert(0, str(max_orders_limit))
-                
+
         except ValueError:
             self.log("❌ Order limit must be a number")
         except Exception as e:
@@ -1169,9 +1172,9 @@ class TradingBotGUI:
         try:
             from risk_management import get_order_limit_status
             status = get_order_limit_status()
-            
+
             count_text = f"{status['current_count']}/{status['max_limit']}"
-            
+
             # Color code based on usage with better visualization
             if status['percentage_used'] >= 90:
                 color = "#ff4444"  # Bright red for danger
@@ -1185,13 +1188,13 @@ class TradingBotGUI:
             else:
                 color = "#00aa00"  # Green for safe
                 status_icon = "🟢"
-            
+
             display_text = f"{status_icon} {count_text}"
-            
+
             # Update GUI label
             if hasattr(self, 'order_count_lbl'):
                 self.order_count_lbl.config(text=display_text, foreground=color)
-                
+
                 # Log significant changes
                 if status['percentage_used'] >= 80:
                     self.log(f"⚠️ Order limit warning: {count_text} ({status['percentage_used']:.0f}% used)")
@@ -1200,17 +1203,66 @@ class TradingBotGUI:
             else:
                 # Fallback logging if label doesn't exist
                 logger(f"📊 Order Count: {display_text} ({status['percentage_used']:.0f}% used)")
-            
+
             # Update max orders entry field to show current limit
             if hasattr(self, 'max_orders_entry'):
                 current_entry = self.max_orders_entry.get()
                 if current_entry != str(status['max_limit']):
                     self.max_orders_entry.delete(0, tk.END)
                     self.max_orders_entry.insert(0, str(status['max_limit']))
-            
+
         except Exception as e:
             error_text = "❌ ERR"
             if hasattr(self, 'order_count_lbl'):
                 self.order_count_lbl.config(text=error_text, foreground="red")
             logger(f"❌ Order count update error: {str(e)}")
             self.log(f"❌ Order limit display error: {str(e)}")
+
+    def update_daily_order_count_display(self):
+        """Update daily order count display in GUI"""
+        try:
+            from risk_management import get_daily_order_limit_status
+            status = get_daily_order_limit_status()
+
+            count_text = f"{status['current_daily_count']}/{status['max_daily_limit']}"
+
+            # Determine color based on percentage used
+            if status['daily_percentage_used'] >= 90:
+                color = "#ff4444"  # Bright red
+                status_icon = "🔴"
+            elif status['daily_percentage_used'] >= 70:
+                color = "#ff8800"  # Orange
+                status_icon = "🟡"
+            elif status['daily_percentage_used'] >= 50:
+                color = "#ffcc00"  # Yellow
+                status_icon = "🟡"
+            else:
+                color = "#00aa00"  # Green
+                status_icon = "🟢"
+
+            display_text = f"{status_icon} {count_text}"
+
+            # Add a new label for daily order count if it doesn't exist
+            if not hasattr(self, 'daily_order_count_lbl'):
+                # Find the position of the existing order count label and place the new one next to it
+                current_count_widget = self.order_count_lbl
+                parent_frame = current_count_widget.master
+                
+                self.daily_order_count_lbl = ttk.Label(parent_frame, text=display_text, foreground=color)
+                self.daily_order_count_lbl.grid(row=0, column=2, padx=(15, 5)) # Adjust column index as needed
+                self.log("Created daily order count label")
+            else:
+                self.daily_order_count_lbl.config(text=display_text, foreground=color)
+
+            # Log significant changes for daily count
+            if status['daily_percentage_used'] >= 80:
+                self.log(f"⚠️ Daily Order Limit Warning: {count_text} ({status['daily_percentage_used']:.0f}% used)")
+            elif status['current_daily_count'] == 0:
+                self.log(f"✅ Daily Order Count Reset: {count_text}")
+
+        except Exception as e:
+            error_text = "❌ ERR"
+            if hasattr(self, 'daily_order_count_lbl'):
+                self.daily_order_count_lbl.config(text=error_text, foreground="red")
+            logger(f"❌ Daily order count update error: {str(e)}")
+            self.log(f"❌ Daily order limit display error: {str(e)}")

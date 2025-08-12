@@ -24,17 +24,32 @@ daily_trade_count = 0
 session_start_time = datetime.datetime.now().date()
 max_orders_limit = DEFAULT_MAX_ORDERS
 current_order_count = 0
+max_daily_orders = 50  # User configurable daily limit
+daily_profit = 0.0
+last_reset_date = datetime.date.today()
 
 def get_order_limit_status() -> Dict[str, Any]:
     """Get current order limit status"""
-    global current_order_count, max_orders_limit
+    try:
+        global current_order_count, max_orders_limit
 
-    return {
-        "current_count": current_order_count,
-        "max_limit": max_orders_limit,
-        "percentage_used": (current_order_count / max(max_orders_limit, 1)) * 100,
-        "can_trade": current_order_count < max_orders_limit
-    }
+        percentage_used = (current_order_count / max_orders_limit * 100) if max_orders_limit > 0 else 0
+
+        return {
+            'current_count': current_order_count,
+            'max_limit': max_orders_limit,
+            'percentage_used': percentage_used,
+            'orders_remaining': max(0, max_orders_limit - current_order_count)
+        }
+
+    except Exception as e:
+        logger(f"❌ Error getting order limit status: {str(e)}")
+        return {
+            'current_count': 0,
+            'max_limit': 10,
+            'percentage_used': 0,
+            'orders_remaining': 10
+        }
 
 def reset_order_count():
     """Reset order count to zero"""
@@ -54,6 +69,86 @@ def decrement_order_count():
     if current_order_count > 0:
         current_order_count -= 1
         logger(f"📊 Order count decremented to: {current_order_count}")
+
+
+def check_order_limit() -> bool:
+    """Check if order limit is reached - thread-safe"""
+    try:
+        with _risk_lock:
+            global max_orders_limit
+
+            # Get current order count from GUI
+            current_orders = 0
+            try:
+                import __main__
+                if hasattr(__main__, 'gui') and __main__.gui:
+                    current_orders = __main__.gui.order_count
+            except:
+                pass
+
+            # Also check actual MT5 positions with retry
+            max_retries = 3
+            actual_positions = 0
+
+            for attempt in range(max_retries):
+                try:
+                    positions = mt5.positions_get()
+                    actual_positions = len(positions) if positions else 0
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        logger(f"⚠️ Failed to get positions after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(0.1)
+
+            # Use the higher of the two counts for safety
+            total_orders = max(current_orders, actual_positions)
+
+            if total_orders >= max_orders_limit:
+                logger(f"🛑 Order limit reached: {total_orders}/{max_orders_limit}")
+                return False
+
+            return True
+
+    except Exception as e:
+        logger(f"❌ Error checking order limit: {str(e)}")
+        return False
+
+
+def set_max_orders_limit(new_limit: int) -> bool:
+    """Set new maximum orders limit"""
+    try:
+        global max_orders_limit
+
+        if new_limit < 1 or new_limit > 100:
+            logger(f"❌ Invalid order limit: {new_limit} (must be 1-100)")
+            return False
+
+        max_orders_limit = new_limit
+        logger(f"✅ Order limit updated to: {max_orders_limit}")
+        return True
+
+    except Exception as e:
+        logger(f"❌ Error setting order limit: {str(e)}")
+        return False
+
+
+def reset_order_count() -> None:
+    """Reset order count"""
+    try:
+        # Update GUI order count
+        try:
+            import __main__
+            if hasattr(__main__, 'gui') and __main__.gui:
+                __main__.gui.order_count = 0
+                __main__.gui.update_order_count_display()
+        except:
+            pass
+
+        logger("✅ Order count reset to 0")
+
+    except Exception as e:
+        logger(f"❌ Error resetting order count: {str(e)}")
 
 
 def check_order_limit() -> bool:
@@ -191,23 +286,24 @@ def risk_management_check() -> bool:
 
 
 def check_daily_limits() -> bool:
-    """Check and reset daily limits"""
-    global daily_trade_count, session_start_time
-
+    """Check if daily trading limits are exceeded"""
     try:
-        current_date = datetime.datetime.now().date()
+        global daily_trade_count, max_daily_orders, last_reset_date
 
         # Reset counters if new day
-        if current_date != session_start_time:
-            daily_trade_count = 0
-            session_start_time = current_date
-            logger(f"📅 New trading day: Counters reset")
+        if datetime.date.today() != last_reset_date:
+            reset_daily_counters()
 
-        return daily_trade_count < MAX_DAILY_TRADES
+        # Check daily trade limit (use user-configured limit)
+        if daily_trade_count >= max_daily_orders:
+            logger(f"⚠️ Daily trade limit reached: {daily_trade_count}/{max_daily_orders}")
+            return False
+
+        return True
 
     except Exception as e:
         logger(f"❌ Error checking daily limits: {str(e)}")
-        return True
+        return True  # Allow trading on error (fail-safe)
 
 
 def increment_daily_trade_count() -> None:
@@ -394,3 +490,112 @@ def emergency_close_all_positions() -> None:
 
     except Exception as e:
         logger(f"❌ Emergency close error: {str(e)}")
+
+
+def initialize_risk_management():
+    """Initialize risk management system"""
+    try:
+        global max_orders_limit, max_daily_orders
+
+        # Load from config if available
+        try:
+            from config_manager import config_manager
+
+            # Load order limit
+            saved_limit = config_manager.get("max_orders", DEFAULT_MAX_ORDERS)
+            if isinstance(saved_limit, int) and MIN_MAX_ORDERS <= saved_limit <= MAX_MAX_ORDERS:
+                max_orders_limit = saved_limit
+                logger(f"✅ Order limit loaded from config: {max_orders_limit}")
+            else:
+                logger(f"⚠️ Invalid saved order limit, using default: {DEFAULT_MAX_ORDERS}")
+
+            # Load daily order limit
+            saved_daily_limit = config_manager.get("max_daily_orders", 50)
+            if isinstance(saved_daily_limit, int) and 1 <= saved_daily_limit <= 1000:
+                max_daily_orders = saved_daily_limit
+                logger(f"✅ Daily order limit loaded from config: {max_daily_orders}")
+            else:
+                logger(f"⚠️ Invalid saved daily limit, using default: 50")
+
+        except Exception as config_e:
+            logger(f"⚠️ Config load failed, using defaults: {str(config_e)}")
+
+        # Reset daily counters if needed
+        if datetime.date.today() != last_reset_date:
+            reset_daily_counters()
+
+        logger("✅ Risk management system initialized")
+        logger(f"📊 Limits: Orders={max_orders_limit}, Daily={max_daily_orders}")
+        return True
+
+    except Exception as e:
+        logger(f"❌ Risk management initialization error: {str(e)}")
+        return False
+
+
+def reset_daily_counters():
+    """Reset daily counters"""
+    global daily_trade_count, last_reset_date
+    daily_trade_count = 0
+    last_reset_date = datetime.date.today()
+    logger("🔄 Daily trade counters reset.")
+
+
+def get_daily_trade_status() -> Dict[str, Any]:
+    """Get current daily trade status"""
+    try:
+        global daily_trade_count, max_daily_orders
+
+        percentage_used = (daily_trade_count / max_daily_orders * 100) if max_daily_orders > 0 else 0
+
+        return {
+            'current_count': daily_trade_count,
+            'max_limit': max_daily_orders,
+            'percentage_used': percentage_used,
+            'trades_remaining': max(0, max_daily_orders - daily_trade_count)
+        }
+
+    except Exception as e:
+        logger(f"❌ Error getting daily trade status: {str(e)}")
+        return {
+            'current_count': 0,
+            'max_limit': 50,
+            'percentage_used': 0,
+            'trades_remaining': 50
+        }
+
+def set_max_daily_orders(new_limit: int) -> bool:
+    """Set new maximum daily orders limit"""
+    try:
+        global max_daily_orders
+
+        if not isinstance(new_limit, int) or new_limit < MIN_MAX_ORDERS or new_limit > 1000:
+            logger(f"❌ Invalid daily order limit: {new_limit} (must be {MIN_MAX_ORDERS}-1000)")
+            return False
+
+        old_limit = max_daily_orders
+        max_daily_orders = new_limit
+
+        logger(f"✅ Daily order limit updated: {old_limit} → {max_daily_orders}")
+
+        # Save to config
+        try:
+            from config_manager import config_manager
+            config_manager.set("max_daily_orders", max_daily_orders)
+        except Exception as config_e:
+            logger(f"⚠️ Failed to save daily limit to config: {str(config_e)}")
+
+        return True
+
+    except Exception as e:
+        logger(f"❌ Error setting daily order limit: {str(e)}")
+        return False
+
+def get_max_daily_orders() -> int:
+    """Get current maximum daily orders limit"""
+    try:
+        global max_daily_orders
+        return max_daily_orders
+    except Exception as e:
+        logger(f"❌ Error getting daily order limit: {str(e)}")
+        return 50

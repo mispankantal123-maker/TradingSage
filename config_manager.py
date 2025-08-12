@@ -13,6 +13,7 @@ class ConfigManager:
         self.default_config = {
             "max_orders": 10,
             "max_daily_trades": 50,
+            "max_daily_orders": 50,  # User configurable daily order limit
             "max_risk_percentage": 2.0,
             "default_lot_size": 0.01,
             "tp_default": "20",
@@ -88,7 +89,7 @@ class ConfigManager:
                 return False
             
             # Auto-save if critical setting
-            if key in ["max_orders", "max_daily_trades", "max_risk_percentage"]:
+            if key in ["max_orders", "max_daily_trades", "max_daily_orders", "max_risk_percentage"]:
                 self.save_config()
             
             return True
@@ -107,6 +108,10 @@ class ConfigManager:
             
             if self.config.get("max_daily_trades", 0) < 1 or self.config.get("max_daily_trades", 0) > 1000:
                 logger("❌ Invalid max_daily_trades: must be 1-1000")
+                return False
+            
+            if self.config.get("max_daily_orders", 0) < 1 or self.config.get("max_daily_orders", 0) > 1000:
+                logger("❌ Invalid max_daily_orders: must be 1-1000")
                 return False
             
             if self.config.get("max_risk_percentage", 0) < 0.1 or self.config.get("max_risk_percentage", 0) > 10:

@@ -55,9 +55,11 @@ def main_trading_loop() -> None:
                 if not risk_management_check():
                     logger("⚠️ Risk management warning - continuing with caution")
 
-                # Check daily limits
+                # Check daily limits (now includes user-configurable daily order limit)
                 if not check_daily_limits():
-                    logger("📊 Daily trading limits reached - pausing for today")
+                    from risk_management import get_daily_trade_status
+                    status = get_daily_trade_status()
+                    logger(f"📊 Daily order limit reached ({status['current_count']}/{status['max_limit']}) - pausing for today")
                     time.sleep(300)  # Wait 5 minutes then check again
                     continue
 
@@ -573,9 +575,11 @@ def trading_loop():
                 if not risk_management_check():
                     logger("⚠️ Risk management warning - continuing with caution")
 
-                # Check daily limits
+                # Check daily limits (now includes user-configurable daily order limit)
                 if not check_daily_limits():
-                    logger("📊 Daily trading limits reached - pausing for today")
+                    from risk_management import get_daily_trade_status
+                    status = get_daily_trade_status()
+                    logger(f"📊 Daily order limit reached ({status['current_count']}/{status['max_limit']}) - pausing for today")
                     time.sleep(300)  # Wait 5 minutes then check again
                     continue
 
