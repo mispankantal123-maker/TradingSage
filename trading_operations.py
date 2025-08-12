@@ -321,12 +321,19 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
             logger(f"   💰 Price: {result.price}")
 
             # 7. POST-EXECUTION ENHANCEMENTS
-            # Add trailing stop
+            # Small delay to allow position to register in MT5
+            time.sleep(0.5)
+            
+            # Add trailing stop with proper error handling
             try:
                 from trailing_stop_manager import add_trailing_stop_to_position
-                position_ticket = result.deal
-                add_trailing_stop_to_position(position_ticket, symbol, action)
-                logger(f"✅ Trailing stop added to position {position_ticket}")
+                # Use order ticket instead of deal ticket for position tracking
+                position_ticket = getattr(result, 'order', None)
+                if position_ticket:
+                    add_trailing_stop_to_position(position_ticket, symbol, action)
+                    logger(f"✅ Trailing stop added to position {position_ticket}")
+                else:
+                    logger("⚠️ No position ticket available for trailing stop")
             except Exception as e:
                 logger(f"⚠️ Failed to add trailing stop: {str(e)}")
 
@@ -340,16 +347,22 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
             # Log to CSV
             try:
                 log_order_csv(result, symbol, action)
+                logger(f"📋 Order logged to CSV: csv_logs/orders.csv")
             except Exception as e:
                 logger(f"⚠️ CSV logging failed: {str(e)}")
 
             # Increment counters
-            increment_daily_trade_count()
+            try:
+                increment_daily_trade_count()
+                logger(f"📈 Daily trade count incremented")
+            except Exception as e:
+                logger(f"⚠️ Trade count increment failed: {str(e)}")
 
             # Send notifications
             try:
                 from telegram_notifications import notify_trade_executed
                 notify_trade_executed(symbol, action, lot_size, current_price, tp_price, sl_price, strategy)
+                logger(f"📱 Telegram notification sent successfully")
             except Exception as e:
                 logger(f"⚠️ Telegram notification failed: {str(e)}")
 

@@ -414,35 +414,59 @@ def get_dynamic_position_size(symbol: str, strategy: str, base_lot_size: float) 
         spread_factor = 1.0
         strategy_factor = 1.0
 
-        # Volatility adjustment - FIXED: Handle numpy arrays properly
+        # Volatility adjustment - FIXED: Handle numpy arrays and pandas Series properly
         try:
-            # Convert to scalar if it's an array
+            # Convert to scalar if it's an array/Series
             if hasattr(atr_pips, '__len__') and not isinstance(atr_pips, str):
-                atr_pips = float(atr_pips[-1]) if len(atr_pips) > 0 else 5.0
+                if hasattr(atr_pips, 'iloc'):  # pandas Series
+                    atr_pips = float(atr_pips.iloc[-1]) if len(atr_pips) > 0 else 5.0
+                elif hasattr(atr_pips, '__getitem__'):  # numpy array or list
+                    atr_pips = float(atr_pips[-1]) if len(atr_pips) > 0 else 5.0
+                else:
+                    atr_pips = float(atr_pips)
             else:
                 atr_pips = float(atr_pips)
-        except (TypeError, ValueError, IndexError):
+        except (TypeError, ValueError, IndexError, AttributeError):
             atr_pips = 5.0
             
-        if atr_pips > 20:  # High volatility
-            volatility_factor = 0.8
-        elif atr_pips < 5:  # Low volatility
-            volatility_factor = 1.2
-
-        # Spread adjustment - FIXED: Handle numpy arrays properly
+        # Safe comparison for volatility factor
         try:
-            # Convert to scalar if it's an array
+            atr_pips_val = float(atr_pips)
+            if atr_pips_val > 20:  # High volatility
+                volatility_factor = 0.8
+            elif atr_pips_val < 5:  # Low volatility
+                volatility_factor = 1.2
+            else:
+                volatility_factor = 1.0
+        except (TypeError, ValueError):
+            volatility_factor = 1.0
+
+        # Spread adjustment - FIXED: Handle numpy arrays and pandas Series properly
+        try:
+            # Convert to scalar if it's an array/Series
             if hasattr(spread_pips, '__len__') and not isinstance(spread_pips, str):
-                spread_pips = float(spread_pips[-1]) if len(spread_pips) > 0 else 2.0
+                if hasattr(spread_pips, 'iloc'):  # pandas Series
+                    spread_pips = float(spread_pips.iloc[-1]) if len(spread_pips) > 0 else 2.0
+                elif hasattr(spread_pips, '__getitem__'):  # numpy array or list
+                    spread_pips = float(spread_pips[-1]) if len(spread_pips) > 0 else 2.0
+                else:
+                    spread_pips = float(spread_pips)
             else:
                 spread_pips = float(spread_pips)
-        except (TypeError, ValueError, IndexError):
+        except (TypeError, ValueError, IndexError, AttributeError):
             spread_pips = 2.0
             
-        if spread_pips > 3:  # Wide spread
-            spread_factor = 0.7
-        elif spread_pips < 1:  # Tight spread
-            spread_factor = 1.1
+        # Safe comparison for spread factor
+        try:
+            spread_pips_val = float(spread_pips)
+            if spread_pips_val > 3:  # Wide spread
+                spread_factor = 0.7
+            elif spread_pips_val < 1:  # Tight spread
+                spread_factor = 1.1
+            else:
+                spread_factor = 1.0
+        except (TypeError, ValueError):
+            spread_factor = 1.0
 
         # Strategy-specific adjustments
         strategy_multipliers = {
