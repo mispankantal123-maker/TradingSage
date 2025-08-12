@@ -27,6 +27,30 @@ except ImportError:
     DYNAMIC_SIZING_AVAILABLE = False
     logger("⚠️ Dynamic position sizing not available")
 
+try:
+    from trailing_stop_manager import add_trailing_stop_to_position, start_trailing_stop_system
+    TRAILING_STOPS_AVAILABLE = True
+    logger("✅ Trailing stop system loaded")
+except ImportError:
+    TRAILING_STOPS_AVAILABLE = False
+    logger("⚠️ Trailing stop system not available")
+
+try:
+    from economic_calendar import should_pause_for_news, start_economic_calendar
+    ECONOMIC_CALENDAR_AVAILABLE = True
+    logger("✅ Economic calendar loaded")
+except ImportError:
+    ECONOMIC_CALENDAR_AVAILABLE = False
+    logger("⚠️ Economic calendar not available")
+
+try:
+    from drawdown_manager import get_recovery_adjustments, add_trade_to_tracking, initialize_drawdown_tracking
+    DRAWDOWN_MANAGER_AVAILABLE = True
+    logger("✅ Drawdown manager loaded")
+except ImportError:
+    DRAWDOWN_MANAGER_AVAILABLE = False
+    logger("⚠️ Drawdown manager not available")
+
 
 def calculate_pip_value(symbol: str, lot_size: float) -> float:
     """Calculate pip value for position sizing"""
@@ -467,12 +491,28 @@ def close_all_orders(symbol: str = None) -> None:
 
 
 def execute_trade_signal(symbol: str, action: str) -> bool:
-    """Execute REAL trade signal with live money"""
+    """Execute REAL trade signal with live money - ENHANCED FOR REAL TRADING"""
     try:
+        # SAFETY CHECK 1: Order limits
         from risk_management import check_order_limit
         if not check_order_limit():
             logger("🛑 Order limit reached - skipping live trade")
             return False
+        
+        # SAFETY CHECK 2: Economic calendar news check
+        if ECONOMIC_CALENDAR_AVAILABLE:
+            should_pause, pause_reason, event_info = should_pause_for_news(symbol)
+            if should_pause:
+                logger(f"📅 Trade paused for news: {pause_reason}")
+                return False
+        
+        # SAFETY CHECK 3: Drawdown recovery adjustments
+        recovery_adjustments = {}
+        if DRAWDOWN_MANAGER_AVAILABLE:
+            recovery_adjustments = get_recovery_adjustments()
+            if recovery_adjustments.get("pause_low_confidence", False):
+                # Additional validation for recovery mode
+                logger("⚠️ Recovery mode active - using conservative parameters")
 
         current_strategy = "Scalping"
         try:
@@ -525,7 +565,7 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
         else:
             estimated_sl_price = current_price * 0.99 if action.upper() == "BUY" else current_price * 1.01
         
-        # DYNAMIC POSITION SIZING CALCULATION
+        # DYNAMIC POSITION SIZING CALCULATION WITH RECOVERY ADJUSTMENTS
         if DYNAMIC_SIZING_AVAILABLE:
             try:
                 dynamic_lot, sizing_details = get_dynamic_position_size(
@@ -537,7 +577,14 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
                 
                 if dynamic_lot > 0:
                     lot_size = dynamic_lot
-                    logger(f"💰 Dynamic lot size: {lot_size} (Risk: {sizing_details.get('risk_percent', 0):.2f}%)")
+                    
+                    # Apply recovery mode adjustments
+                    if recovery_adjustments and "lot_size_multiplier" in recovery_adjustments:
+                        lot_adjustment = recovery_adjustments["lot_size_multiplier"]
+                        lot_size = lot_size * lot_adjustment
+                        logger(f"⚡ Recovery mode: Lot size adjusted by {lot_adjustment:.2f}x")
+                    
+                    logger(f"💰 Final lot size: {lot_size} (Risk: {sizing_details.get('risk_percent', 0):.2f}%)")
                     logger(f"   Sizing method: {sizing_details.get('method', 'Unknown')}")
                 else:
                     logger(f"⚠️ Dynamic sizing returned invalid lot: {dynamic_lot}, using default")
@@ -622,10 +669,46 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
 
         if success:
             logger(f"✅ LIVE {action} order executed successfully for {symbol}")
+            
+            # PROFESSIONAL ENHANCEMENTS POST-EXECUTION
+            
+            # 1. Add trailing stop if available
+            if TRAILING_STOPS_AVAILABLE:
+                try:
+                    # Get the position ticket from recent positions
+                    positions = mt5.positions_get(symbol=symbol)
+                    if positions:
+                        latest_position = positions[-1]  # Most recent position
+                        trail_config = {
+                            "trail_distance_pips": 20,
+                            "use_atr_based": True,
+                            "min_profit_pips": 10
+                        }
+                        add_trailing_stop_to_position(latest_position.ticket, symbol, trail_config)
+                        logger(f"📈 Trailing stop added to position {latest_position.ticket}")
+                except Exception as trail_e:
+                    logger(f"⚠️ Failed to add trailing stop: {str(trail_e)}")
+            
+            # 2. Track trade for drawdown analysis
+            if DRAWDOWN_MANAGER_AVAILABLE:
+                try:
+                    # Initial tracking (profit will be updated when closed)
+                    add_trade_to_tracking(symbol, action, 0.0, lot_size)
+                except Exception as track_e:
+                    logger(f"⚠️ Failed to track trade: {str(track_e)}")
+            
+            # 3. Log order to CSV
+            try:
+                log_order_csv(symbol, action, lot_size, current_price, tp_price, sl_price, "LiveSignal")
+            except Exception as csv_e:
+                logger(f"⚠️ CSV logging failed: {str(csv_e)}")
+            
+            # 4. Send Telegram notification
             try:
                 notify_trade_executed(symbol, action, lot_size, current_price, tp_price, sl_price, current_strategy)
             except Exception as telegram_error:
                 logger(f"⚠️ Telegram notification failed: {str(telegram_error)}")
+                
         else:
             logger(f"❌ Failed to execute LIVE {action} order for {symbol}")
 
