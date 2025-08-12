@@ -38,6 +38,24 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                     logger(f"✅ ENHANCED ANALYSIS: {enhanced_result['signal']} signal (Confidence: {confidence:.1%})")
                     logger(f"   🔍 Reason: {enhanced_result.get('reason', 'N/A')}")
 
+                    # SMART MONEY CONCEPTS: Fair Value Gap analysis
+                    try:
+                        from fair_value_gap_analyzer import get_fvg_trading_signals
+                        fvg_analysis = get_fvg_trading_signals(df, symbol)
+                        
+                        if fvg_analysis.get('signal') and fvg_analysis['confidence'] > 0.6:
+                            if fvg_analysis['signal'] == enhanced_result['signal']:
+                                logger(f"✅ FVG CONFLUENCE: Fair Value Gap confirms {enhanced_result['signal']}")
+                                logger(f"   📊 FVG Confidence: {fvg_analysis['confidence']:.1%}")
+                                enhanced_confidence = min(0.95, confidence + (fvg_analysis['confidence'] * 0.3))
+                                return enhanced_result["signal"], [f"Enhanced analysis + FVG confluence (Confidence: {enhanced_confidence:.1%})"]
+                            else:
+                                logger(f"⚠️ FVG CONFLICT: FVG suggests {fvg_analysis['signal']} vs Enhanced {enhanced_result['signal']}")
+                        else:
+                            logger(f"🔍 FVG ANALYSIS: {fvg_analysis.get('reason', 'No FVG signal')}")
+                    except Exception as fvg_e:
+                        logger(f"⚠️ FVG analysis error: {str(fvg_e)}")
+
                     # Check XAU/USD specific analysis
                     if symbol.upper() in ['XAUUSD', 'GOLD']:
                         try:
@@ -261,6 +279,33 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         current_bid = round(current_tick.bid, digits)
         current_ask = round(current_tick.ask, digits)
         current_price = round((current_bid + current_ask) / 2, digits)
+
+        # SMART MONEY CONCEPTS: Fair Value Gap analysis for scalping
+        try:
+            from fair_value_gap_analyzer import get_fvg_trading_signals
+            fvg_result = get_fvg_trading_signals(df, symbol)
+            
+            if fvg_result.get('signal') and fvg_result['confidence'] > 0.5:
+                fvg_signal = fvg_result['signal']
+                fvg_confidence = fvg_result['confidence']
+                
+                if fvg_signal == 'BUY':
+                    fvg_weight = int(fvg_confidence * 6)  # Up to 6 signals for high confidence
+                    buy_signals += fvg_weight
+                    signals.append(f"✅ SCALP FVG: Strong bullish FVG setup (Confidence: {fvg_confidence:.1%})")
+                    logger(f"🟢 FVG SCALPING BUY: {fvg_weight} signals from Fair Value Gap analysis")
+                    
+                elif fvg_signal == 'SELL':
+                    fvg_weight = int(fvg_confidence * 6)  # Up to 6 signals for high confidence
+                    sell_signals += fvg_weight
+                    signals.append(f"✅ SCALP FVG: Strong bearish FVG setup (Confidence: {fvg_confidence:.1%})")
+                    logger(f"🔴 FVG SCALPING SELL: {fvg_weight} signals from Fair Value Gap analysis")
+                    
+            else:
+                logger(f"🔍 FVG SCALPING: {fvg_result.get('reason', 'No FVG opportunity')}")
+                
+        except Exception as fvg_e:
+            logger(f"⚠️ FVG scalping analysis error: {str(fvg_e)}")
 
         # ENHANCED Scalping conditions - More sensitive signals
 
