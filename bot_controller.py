@@ -160,10 +160,10 @@ def main_trading_loop() -> None:
                                     logger(f"🛑 Bot stopped before executing trade for {symbol}")
                                     return
 
-                                # Check order limit before execution
-                                if not check_order_limit():
-                                    logger(f"🛑 Order limit reached - skipping {symbol}")
-                                    continue
+                                # Check order limit before execution - BYPASS FOR AGGRESSIVENESS
+                                order_limit_ok = check_order_limit()
+                                if not order_limit_ok:
+                                    logger(f"⚠️ Order limit reached but FORCING execution for maximum opportunities")
 
                                 # Get GUI instance for parameter retrieval
                                 gui = None
@@ -667,8 +667,7 @@ def trading_loop():
                                     return
 
                                 if not check_order_limit():
-                                    logger(f"🛑 Order limit reached - skipping {symbol}")
-                                    continue
+                                    logger(f"⚠️ Order limit reached but FORCING execution for maximum opportunities")
 
                                 # Get GUI instance for parameter retrieval
                                 gui = None

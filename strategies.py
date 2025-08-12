@@ -19,7 +19,7 @@ from indicators import calculate_support_resistance
 
 
 def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional[str], List[str]]:
-    """Enhanced strategy execution dengan ROBUST analysis engine integration"""
+    """Enhanced strategy execution dgn ROBUST analysis engine integration"""
     try:
         logger(f"🎯 Running ENHANCED {strategy} strategy for {symbol}")
 
@@ -34,15 +34,24 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
 
             if enhanced_result.get("signal"):
                 confidence = enhanced_result.get("confidence", 0)
-                if confidence >= 0.7:  # High confidence threshold
-                    logger(f"✅ ENHANCED ANALYSIS: {enhanced_result['signal']} signal (Confidence: {confidence:.1%})")
+                # Apply strategy-specific confidence threshold for aggressive trading
+                confidence_thresholds = {
+                    'Scalping': 0.25,   # Ultra-low threshold - maximum trades
+                    'HFT': 0.30,        # Ultra-aggressive HFT
+                    'Intraday': 0.25,   # Maximum intraday positions
+                    'Arbitrage': 0.30   # Fastest arbitrage entries
+                }
+                threshold = confidence_thresholds.get(strategy, 0.5)  # Default to 0.5 if strategy not found
+
+                if confidence >= threshold:
+                    logger(f"✅ ENHANCED ANALYSIS: {enhanced_result['signal']} signal (Confidence: {confidence:.1%}, Threshold: {threshold:.0%})")
                     logger(f"   🔍 Reason: {enhanced_result.get('reason', 'N/A')}")
 
                     # SMART MONEY CONCEPTS: Fair Value Gap analysis
                     try:
                         from fair_value_gap_analyzer import get_fvg_trading_signals
                         fvg_analysis = get_fvg_trading_signals(df, symbol)
-                        
+
                         if fvg_analysis.get('signal') and fvg_analysis['confidence'] > 0.6:
                             if fvg_analysis['signal'] == enhanced_result['signal']:
                                 logger(f"✅ FVG CONFLUENCE: Fair Value Gap confirms {enhanced_result['signal']}")
@@ -61,7 +70,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                         try:
                             from enhanced_xauusd_analyzer import get_xauusd_professional_analysis
                             xau_analysis = get_xauusd_professional_analysis(symbol)
-                            
+
                             if xau_analysis.get('trading_decision') in ['BULLISH', 'BEARISH']:
                                 xau_signal = 'BUY' if xau_analysis['trading_decision'] == 'BULLISH' else 'SELL'
                                 if xau_signal == enhanced_result['signal']:
@@ -75,7 +84,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                     # Use enhanced analysis result
                     return enhanced_result["signal"], [enhanced_result.get("reason", "Enhanced analysis signal")]
                 else:
-                    logger(f"⚠️ ENHANCED ANALYSIS: Low confidence signal rejected ({confidence:.1%})")
+                    logger(f"⚠️ ENHANCED ANALYSIS: Low confidence signal rejected ({confidence:.1%}, Threshold: {threshold:.0%})")
             else:
                 logger(f"🔍 ENHANCED ANALYSIS: No signal - {enhanced_result.get('reason', 'No clear signal detected')}")
 
@@ -99,7 +108,7 @@ def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional
                 try:
                     from dxy_correlation_analyzer import apply_dxy_correlation_filter
                     dxy_filtered = apply_dxy_correlation_filter(symbol, mtf_direction, 0.8)
-                    
+
                     if dxy_filtered['dxy_filter'] == 'CONFIRMS':
                         logger(f"✅ DXY CONFLUENCE: Correlation analysis confirms {mtf_direction}")
                         # Boost confidence with DXY confirmation
@@ -284,26 +293,26 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
         try:
             from fair_value_gap_analyzer import get_fvg_trading_signals
             fvg_result = get_fvg_trading_signals(df, symbol)
-            
+
             if fvg_result.get('signal') and fvg_result['confidence'] > 0.5:
                 fvg_signal = fvg_result['signal']
                 fvg_confidence = fvg_result['confidence']
-                
+
                 if fvg_signal == 'BUY':
                     fvg_weight = int(fvg_confidence * 6)  # Up to 6 signals for high confidence
                     buy_signals += fvg_weight
                     signals.append(f"✅ SCALP FVG: Strong bullish FVG setup (Confidence: {fvg_confidence:.1%})")
                     logger(f"🟢 FVG SCALPING BUY: {fvg_weight} signals from Fair Value Gap analysis")
-                    
+
                 elif fvg_signal == 'SELL':
                     fvg_weight = int(fvg_confidence * 6)  # Up to 6 signals for high confidence
                     sell_signals += fvg_weight
                     signals.append(f"✅ SCALP FVG: Strong bearish FVG setup (Confidence: {fvg_confidence:.1%})")
                     logger(f"🔴 FVG SCALPING SELL: {fvg_weight} signals from Fair Value Gap analysis")
-                    
+
             else:
                 logger(f"🔍 FVG SCALPING: {fvg_result.get('reason', 'No FVG opportunity')}")
-                
+
         except Exception as fvg_e:
             logger(f"⚠️ FVG scalping analysis error: {str(fvg_e)}")
 
@@ -484,17 +493,17 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             # Check for any bullish indicators with ultra-low threshold
             bullish_factors = 0
             bearish_factors = 0
-            
+
             if last['close'] > prev['close']:
                 bullish_factors += 2  # Double weight for price momentum
             else:
                 bearish_factors += 1
-                
+
             if last['EMA8'] > last['EMA20']:
                 bullish_factors += 1
             else:
                 bearish_factors += 1
-                
+
             if last['RSI'] > 45:  # Lowered from 50
                 bullish_factors += 1
             elif last['RSI'] < 55:

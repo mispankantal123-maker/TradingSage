@@ -55,16 +55,16 @@ def get_daily_order_limit_status() -> Dict[str, Any]:
     """Get daily order limit status - FIXED FUNCTION"""
     try:
         global daily_trade_count, max_daily_orders, last_reset_date
-        
+
         # Reset if new day
         today = datetime.date.today()
         if today != last_reset_date:
             daily_trade_count = 0
             last_reset_date = today
             logger("🔄 Daily order count reset for new day")
-        
+
         percentage_used = (daily_trade_count / max_daily_orders * 100) if max_daily_orders > 0 else 0
-        
+
         return {
             'daily_count': daily_trade_count,
             'daily_limit': max_daily_orders,
@@ -72,7 +72,7 @@ def get_daily_order_limit_status() -> Dict[str, Any]:
             'orders_remaining': max(0, max_daily_orders - daily_trade_count),
             'reset_date': last_reset_date.strftime('%Y-%m-%d')
         }
-        
+
     except Exception as e:
         logger(f"❌ Error getting daily order limit status: {str(e)}")
         return {
@@ -360,24 +360,22 @@ def check_daily_limits() -> bool:
 
 
 def increment_daily_trade_count() -> None:
-    """Increment daily trade counter - thread-safe"""
-    global daily_trade_count
-
+    """Increment daily trade count safely"""
     try:
-        with _risk_lock:
-            daily_trade_count += 1
-            logger(f"📊 Daily trades: {daily_trade_count}/{MAX_DAILY_TRADES}")
+        global daily_trade_count, last_reset_date
 
-            # Update GUI if available (schedule on main thread)
-            try:
-                import __main__
-                if hasattr(__main__, 'gui') and __main__.gui and __main__.gui.root:
-                    __main__.gui.root.after(0, lambda: safe_update_gui_count())
-            except:
-                pass
+        # Check if we need to reset for new day
+        today = datetime.date.today()
+        if today != last_reset_date:
+            daily_trade_count = 0
+            last_reset_date = today
+            logger("🔄 Daily trade count reset for new day")
+
+        daily_trade_count += 1
+        logger(f"📈 Daily trade count incremented to: {daily_trade_count}")
 
     except Exception as e:
-        logger(f"❌ Error incrementing trade count: {str(e)}")
+        logger(f"❌ Error incrementing daily trade count: {str(e)}")
 
 
 def safe_update_gui_count():
