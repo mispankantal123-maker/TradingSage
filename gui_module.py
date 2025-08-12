@@ -35,6 +35,7 @@ class TradingBotGUI:
         self.current_strategy = "Scalping"
         self._update_counter = 0
         self._last_update_time = datetime.datetime.now()
+        self._shutdown_in_progress = False
         
         # Initialize order count
         self.order_count = 0
@@ -1032,6 +1033,12 @@ class TradingBotGUI:
     def log(self, message: str):
         """Add message to log display"""
         try:
+            # Check if GUI is still valid before attempting to log
+            if not hasattr(self, 'log_text') or not self.log_text or not self.log_text.winfo_exists():
+                # GUI is destroyed, fallback to console
+                print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
+                return
+                
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
             log_entry = f"[{timestamp}] {message}\n"
 
@@ -1043,30 +1050,59 @@ class TradingBotGUI:
             if lines > 1000:
                 self.log_text.delete("1.0", "100.0")
 
+        except tk.TclError:
+            # GUI component destroyed, use console
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
         except Exception as e:
-            # Fallback to console if GUI log fails
-            print(f"GUI Log Error: {str(e)}")
-            print(f"Message: {message}")
+            # Other errors, still fallback to console
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
 
     def on_closing(self):
         """Handle GUI closing event"""
         try:
-            self.log("🔄 Shutting down trading bot...")
+            # Stop logging to GUI immediately
+            self._shutdown_in_progress = True
+            
+            # Log to console instead during shutdown
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🔄 Shutting down trading bot...")
 
             # Stop bot if running
             import __main__
             if hasattr(__main__, 'bot_running'):
                 __main__.bot_running = False
 
+            # Cancel any pending GUI updates
+            if hasattr(self, 'root') and self.root:
+                # Cancel all pending after() calls
+                try:
+                    self.root.after_cancel("all")
+                except:
+                    pass
+
+            # Clean up GUI components
+            if hasattr(self, 'log_text'):
+                try:
+                    self.log_text.destroy()
+                except:
+                    pass
+                self.log_text = None
+
             # Give time for cleanup
             import time
-            time.sleep(1)
+            time.sleep(0.5)
 
-            self.root.destroy()
+            # Destroy root window
+            if hasattr(self, 'root') and self.root:
+                self.root.quit()
+                self.root.destroy()
 
         except Exception as e:
-            logger(f"❌ Error during shutdown: {str(e)}")
-            self.root.destroy()
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ❌ Error during shutdown: {str(e)}")
+            try:
+                if hasattr(self, 'root') and self.root:
+                    self.root.destroy()
+            except:
+                pass
 
     def get_current_lot_size(self) -> float:
         """Get current lot size for TP/SL percentage calculations"""

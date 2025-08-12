@@ -18,10 +18,16 @@ def logger(msg: str) -> None:
     try:
         import __main__
         if hasattr(__main__, 'gui') and __main__.gui:
-            __main__.gui.log(full_msg)
+            # Check if GUI is in shutdown process
+            if hasattr(__main__.gui, '_shutdown_in_progress') and __main__.gui._shutdown_in_progress:
+                return  # Skip GUI logging during shutdown
+            __main__.gui.log(msg)  # Pass message without timestamp since GUI adds its own
+    except (ImportError, AttributeError, TypeError):
+        # GUI not available or in invalid state
+        pass
     except Exception as e:
-        # Specific exception handling for GUI logging
-        pass  # Silently fail if GUI not available
+        # Any other GUI errors, silently continue
+        pass
 
 
 def ensure_log_directory() -> bool:

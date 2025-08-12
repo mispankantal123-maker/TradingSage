@@ -91,34 +91,48 @@ def create_main_window():
 def on_application_closing():
     """Handle application closing event"""
     try:
-        logger("🔄 Application shutdown initiated...")
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🔄 Application shutdown initiated...")
         
         # Ask user confirmation if bot is running
         global bot_running
         if bot_running:
-            response = messagebox.askyesno(
-                "Confirm Exit",
-                "Trading bot is running. Stop bot and exit?",
-                icon="warning"
-            )
-            if not response:
-                return
+            try:
+                response = messagebox.askyesno(
+                    "Confirm Exit",
+                    "Trading bot is running. Stop bot and exit?",
+                    icon="warning"
+                )
+                if not response:
+                    return
+            except:
+                # GUI might be destroyed, force stop
+                pass
         
         # Stop bot and cleanup
         stop_bot()
         
-        # Close GUI
-        if gui and gui.root:
-            gui.root.quit()
-            gui.root.destroy()
+        # Mark GUI as shutting down
+        if gui:
+            gui._shutdown_in_progress = True
         
-        logger("✅ Application shutdown completed")
+        # Close GUI
+        if gui and hasattr(gui, 'root') and gui.root:
+            try:
+                gui.root.quit()
+            except:
+                pass
+            try:
+                gui.root.destroy()
+            except:
+                pass
+        
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ✅ Application shutdown completed")
         
     except Exception as e:
-        logger(f"❌ Error during application shutdown: {str(e)}")
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ❌ Error during application shutdown: {str(e)}")
         # Force exit if normal shutdown fails
         try:
-            if gui and gui.root:
+            if gui and hasattr(gui, 'root') and gui.root:
                 gui.root.destroy()
         except:
             pass
