@@ -49,6 +49,74 @@ def get_enhanced_analysis(symbol: str, strategy: str, df: pd.DataFrame) -> Dict[
             mtf_signals, tech_signals, risk_assessment, strategy
         )
         
+        # ULTRA ENHANCEMENT: Apply advanced signal optimization
+        if combined_analysis['signal'] and combined_analysis['confidence'] > 0:
+            try:
+                from advanced_signal_optimizer import optimize_trading_signal
+                
+                optimized_result = optimize_trading_signal(
+                    symbol, strategy, df, combined_analysis['signal'], combined_analysis['confidence']
+                )
+                
+                if optimized_result['optimized_signal']:
+                    # Update with optimized results
+                    combined_analysis['signal'] = optimized_result['optimized_signal']
+                    combined_analysis['confidence'] = optimized_result['optimized_confidence']
+                    combined_analysis['quality_level'] = optimized_result['quality_level']
+                    combined_analysis['enhancement_factors'] = optimized_result.get('enhancement_factors', [])
+                    combined_analysis['position_size_multiplier'] = optimized_result.get('position_size_multiplier', 1.0)
+                    combined_analysis['tp_multiplier'] = optimized_result.get('recommended_tp_multiplier', 1.0)
+                    combined_analysis['sl_multiplier'] = optimized_result.get('recommended_sl_multiplier', 1.0)
+                    
+                    logger(f"🚀 ULTRA-OPTIMIZED: {optimized_result['quality_level']} quality signal")
+                    logger(f"   📈 Confidence boost: {optimized_result.get('improvement', 0)*100:.1f}%")
+                    
+                    # Log enhancement factors
+                    for factor in optimized_result.get('enhancement_factors', []):
+                        logger(f"   ✅ {factor}")
+                        
+                else:
+                    # Signal was rejected by advanced optimizer
+                    combined_analysis['signal'] = None
+                    combined_analysis['confidence'] = optimized_result['optimized_confidence']
+                    combined_analysis['reason'] = optimized_result.get('reason', 'Advanced optimization rejected signal')
+                    
+                    logger(f"🛑 ADVANCED FILTER: Signal rejected - {optimized_result.get('reason', 'Quality too low')}")
+                    
+            except Exception as opt_e:
+                logger(f"⚠️ Advanced optimization error: {str(opt_e)}")
+        
+        # FINAL STEP: Ultra-Precise Confidence Calibration
+        if combined_analysis['signal'] and combined_analysis['confidence'] > 0:
+            try:
+                from confidence_calibration_system import calibrate_signal_confidence
+                
+                calibration_result = calibrate_signal_confidence(symbol, strategy, combined_analysis)
+                
+                if calibration_result['recommended_action'] != 'REJECT':
+                    # Apply ultra-precise calibration
+                    combined_analysis['confidence'] = calibration_result['calibrated_confidence']
+                    combined_analysis['quality_grade'] = calibration_result['quality_grade']
+                    combined_analysis['recommended_action'] = calibration_result['recommended_action']
+                    combined_analysis['position_sizing_factor'] = calibration_result['position_sizing_factor']
+                    combined_analysis['tp_sl_adjustments'] = calibration_result['tp_sl_adjustments']
+                    combined_analysis['calibration_factors'] = calibration_result.get('calibration_factors', [])
+                    
+                    logger(f"🎯 ULTRA-CALIBRATED: {calibration_result['quality_grade']} grade signal")
+                    logger(f"   📊 Gates passed: {len(calibration_result.get('quality_gates_passed', []))}")
+                    logger(f"   🚀 Action: {calibration_result['recommended_action']}")
+                    
+                else:
+                    # Signal rejected by ultra-precise calibration
+                    combined_analysis['signal'] = None
+                    combined_analysis['confidence'] = calibration_result['calibrated_confidence']
+                    combined_analysis['reason'] = calibration_result.get('rejection_reason', 'Ultra-calibration rejected signal')
+                    
+                    logger(f"🛑 ULTRA-FILTER: Signal rejected - {calibration_result.get('rejection_reason', 'Quality insufficient')}")
+                    
+            except Exception as cal_e:
+                logger(f"⚠️ Ultra-calibration error: {str(cal_e)}")
+        
         logger(f"✅ Enhanced Analysis Complete: {combined_analysis['signal']} (Confidence: {combined_analysis['confidence']:.1%})")
         
         return combined_analysis

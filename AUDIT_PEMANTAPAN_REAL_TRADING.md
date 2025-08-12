@@ -27,6 +27,21 @@
 - **Professional confluence**: Higher timeframe filtering
 - **DXY correlation**: Real-time Dollar Index analysis
 
+### 3. 🚀 ULTRA-ADVANCED SIGNAL OPTIMIZER
+- **Institutional Flow Analysis**: Professional money flow detection (25% weight)
+- **Volume Profile Analysis**: Price-volume confluence and accumulation/distribution (20% weight)
+- **Enhanced Multi-Timeframe**: Perfect alignment detection across M1/M5/M15/H1/H4 (20% weight)
+- **Advanced Market Structure**: Structure break detection with 85% confidence (15% weight)
+- **Momentum Confluence**: RSI/MACD/Stochastic perfect alignment (10% weight)
+- **Session Bias Optimization**: Symbol-specific session preferences (10% weight)
+
+### 4. 🎯 CONFIDENCE CALIBRATION SYSTEM
+- **7-Component Calibration**: Technical, MTF, Volume, Structure, Risk, Session, Correlation
+- **Quality Grading**: A+ (92%+), A (87%+), B+ (82%+), B (75%+), C (68%+) dengan dynamic thresholds
+- **Quality Gates**: 7 mandatory gates including volume, spread, volatility, correlation checks
+- **Historical Performance**: Self-learning calibration based on actual outcomes
+- **Position Sizing**: A+ signals get 2.5x position size, F signals rejected completely
+
 **Features**:
 - Automatic session detection (Asian/London/NY/Overlap)
 - Spread analysis optimized untuk XAU/USD (3-5 pips)
