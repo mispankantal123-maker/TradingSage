@@ -414,13 +414,31 @@ def get_dynamic_position_size(symbol: str, strategy: str, base_lot_size: float) 
         spread_factor = 1.0
         strategy_factor = 1.0
 
-        # Volatility adjustment
+        # Volatility adjustment - FIXED: Handle numpy arrays properly
+        try:
+            # Convert to scalar if it's an array
+            if hasattr(atr_pips, '__len__') and not isinstance(atr_pips, str):
+                atr_pips = float(atr_pips[-1]) if len(atr_pips) > 0 else 5.0
+            else:
+                atr_pips = float(atr_pips)
+        except (TypeError, ValueError, IndexError):
+            atr_pips = 5.0
+            
         if atr_pips > 20:  # High volatility
             volatility_factor = 0.8
         elif atr_pips < 5:  # Low volatility
             volatility_factor = 1.2
 
-        # Spread adjustment
+        # Spread adjustment - FIXED: Handle numpy arrays properly
+        try:
+            # Convert to scalar if it's an array
+            if hasattr(spread_pips, '__len__') and not isinstance(spread_pips, str):
+                spread_pips = float(spread_pips[-1]) if len(spread_pips) > 0 else 2.0
+            else:
+                spread_pips = float(spread_pips)
+        except (TypeError, ValueError, IndexError):
+            spread_pips = 2.0
+            
         if spread_pips > 3:  # Wide spread
             spread_factor = 0.7
         elif spread_pips < 1:  # Tight spread

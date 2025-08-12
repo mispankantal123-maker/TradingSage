@@ -70,11 +70,30 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
         point = getattr(symbol_info, 'point', 0.00001)
         digits = getattr(symbol_info, 'digits', 5)
 
-        # FIXED: Proper TP/SL calculation - NO REVERSAL for HFT or any strategy
+        # FIXED: Get minimum stops level for proper distance
+        stops_level = getattr(symbol_info, 'trade_stops_level', 0)
+        min_distance = max(stops_level * point, point * 50)  # Minimum 50 points
+        
+        # Special handling for Gold/XAU symbols
+        if 'XAU' in symbol.upper() or 'GOLD' in symbol.upper():
+            min_distance = max(min_distance, 0.5)  # Minimum 50 cents for Gold
+
+        # FIXED: Proper TP/SL calculation with minimum distance validation
         if unit.lower() == "pips":
             # Standard pip calculation
-            pip_multiplier = 10 if "JPY" in symbol else 10
-            distance = abs(value) * point * pip_multiplier
+            if "JPY" in symbol:
+                pip_multiplier = 0.01  # JPY pairs
+            elif 'XAU' in symbol.upper() or 'GOLD' in symbol.upper():
+                pip_multiplier = 0.1   # Gold uses 10 cents per pip
+            else:
+                pip_multiplier = 0.0001  # Standard forex pairs
+                
+            distance = abs(value) * pip_multiplier
+            
+            # Ensure minimum distance
+            if distance < min_distance:
+                distance = min_distance
+                logger(f"⚠️ TP/SL distance adjusted to minimum: {distance}")
             
             # CORRECT TP/SL logic - NO reversal needed
             if order_type.upper() == "BUY":
@@ -222,8 +241,43 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
             sl_price = calculate_tp_sl_all_modes(sl_value, sl_unit, symbol, action, current_price, lot_size)
             logger(f"🛡️ Calculated SL: {sl_price:.5f}")
 
-        # 4. PREPARE ORDER REQUEST
+        # 4. PREPARE ORDER REQUEST WITH ENHANCED VALIDATION
         order_type = mt5.ORDER_TYPE_BUY if action == "BUY" else mt5.ORDER_TYPE_SELL
+        
+        # FINAL TP/SL VALIDATION - Prevent "Invalid stops" error
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info:
+            stops_level = getattr(symbol_info, 'trade_stops_level', 0)
+            min_distance = max(stops_level * symbol_info.point, symbol_info.point * 50)
+            
+            # Special handling for Gold
+            if 'XAU' in symbol.upper() or 'GOLD' in symbol.upper():
+                min_distance = max(min_distance, 1.0)  # Minimum $1 for Gold
+            
+            # Validate and adjust TP/SL if needed
+            if tp_price > 0:
+                if action == "BUY":
+                    min_tp = current_price + min_distance
+                    if tp_price < min_tp:
+                        tp_price = round(min_tp, symbol_info.digits)
+                        logger(f"⚠️ TP adjusted to minimum distance: {tp_price}")
+                else:  # SELL
+                    max_tp = current_price - min_distance
+                    if tp_price > max_tp:
+                        tp_price = round(max_tp, symbol_info.digits)
+                        logger(f"⚠️ TP adjusted to minimum distance: {tp_price}")
+                        
+            if sl_price > 0:
+                if action == "BUY":
+                    max_sl = current_price - min_distance
+                    if sl_price > max_sl:
+                        sl_price = round(max_sl, symbol_info.digits)
+                        logger(f"⚠️ SL adjusted to minimum distance: {sl_price}")
+                else:  # SELL
+                    min_sl = current_price + min_distance
+                    if sl_price < min_sl:
+                        sl_price = round(min_sl, symbol_info.digits)
+                        logger(f"⚠️ SL adjusted to minimum distance: {sl_price}")
         
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -236,6 +290,7 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
             "comment": f"Enhanced {strategy}",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_IOC,
+            "deviation": 50,  # Add deviation for better execution
         }
 
         # 5. EXECUTE ORDER

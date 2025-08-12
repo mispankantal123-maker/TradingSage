@@ -46,9 +46,9 @@ def calculate_indicators(df: Any) -> Any:
         df['WMA21'] = wma(df['close'], 21)
 
         # RSI calculation with multiple periods
-        df['RSI'] = rsi(df['close'], 14)
-        df['RSI_fast'] = rsi(df['close'], 7)  # Faster RSI for scalping
-        df['RSI_slow'] = rsi(df['close'], 21)  # Slower RSI for trends
+        df['RSI'] = calculate_rsi(df['close'], 14)
+        df['RSI_fast'] = calculate_rsi(df['close'], 7)  # Faster RSI for scalping
+        df['RSI_slow'] = calculate_rsi(df['close'], 21)  # Slower RSI for trends
 
         # RSI overbought/oversold levels
         df['RSI_oversold'] = df['RSI'] < 30
@@ -108,18 +108,34 @@ def calculate_indicators(df: Any) -> Any:
         return df
 
 
-def rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate RSI with proper error handling"""
+def calculate_rsi(data, period=14):
+    """RSI calculation with proper numpy array handling"""
     try:
-        delta = series.diff()
+        import pandas as pd
+        import numpy as np
+
+        if len(data) < period:
+            return [None] * len(data)
+
+        # Ensure data is pandas Series
+        if not isinstance(data, pd.Series):
+            data = pd.Series(data)
+
+        delta = data.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
+
+        # Handle division by zero
+        with np.errstate(divide='ignore', invalid='ignore'):
+            rs = gain / loss
+            rs = rs.fillna(0)  # Replace NaN with 0
+
         rsi = 100 - (100 / (1 + rs))
-        return rsi.fillna(50)
+        return rsi.fillna(50)  # Replace NaN with neutral 50
+
     except Exception as e:
-        logger(f"❌ Error calculating RSI: {str(e)}")
-        return pd.Series([50] * len(series), index=series.index)
+        logger(f"❌ RSI calculation error: {str(e)}")
+        return [50] * len(data)  # Return neutral RSI on error
 
 
 def macd_enhanced(series: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple:
@@ -150,26 +166,45 @@ def stochastic_enhanced(df: pd.DataFrame, k_period: int = 14, d_period: int = 3)
 
 
 def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Calculate ATR with enhanced error handling"""
+    """Average True Range with enhanced error handling"""
     try:
-        if len(df) < period:
-            return pd.Series([0.0008] * len(df), index=df.index)
+        import pandas as pd
+        import numpy as np
 
-        high = df['high']
-        low = df['low']
-        close = df['close']
+        if len(df) < period:
+            return pd.Series([None] * len(df))
+
+        # Ensure required columns exist
+        required_cols = ['high', 'low', 'close']
+        for col in required_cols:
+            if col not in df.columns:
+                logger(f"❌ Missing column '{col}' for ATR calculation")
+                return pd.Series([0.001] * len(df))  # Return small default ATR
+
+        high = pd.Series(df['high']).astype(float)
+        low = pd.Series(df['low']).astype(float)
+        close = pd.Series(df['close']).astype(float)
 
         tr1 = high - low
         tr2 = abs(high - close.shift(1))
         tr3 = abs(low - close.shift(1))
 
-        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        atr = tr.rolling(window=period).mean()
+        # Handle NaN values
+        tr1 = tr1.fillna(0)
+        tr2 = tr2.fillna(0)
+        tr3 = tr3.fillna(0)
 
-        return atr.fillna(0.0008)
+        tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
+        atr_series = tr.rolling(window=period, min_periods=1).mean()
+
+        # Fill any remaining NaN with small positive values
+        atr_series = atr_series.fillna(0.001)
+
+        return atr_series
+
     except Exception as e:
-        logger(f"❌ Error calculating ATR: {str(e)}")
-        return pd.Series([0.0008] * len(df), index=df.index)
+        logger(f"❌ ATR calculation error: {str(e)}")
+        return pd.Series([0.001] * len(df))  # Return small default ATR
 
 
 def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> dict:

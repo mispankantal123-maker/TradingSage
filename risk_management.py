@@ -454,10 +454,21 @@ def get_current_risk_metrics() -> Dict[str, Any]:
                     logger(f"⚠️ Position risk calculation error: {str(pos_e)}")
                     continue
 
-        # FIXED: Proper type conversion and validation
-        balance = float(account_info.balance) if account_info.balance else 0.0
-        equity = float(account_info.equity) if account_info.equity else 0.0
-        margin = float(account_info.margin) if account_info.margin else 0.0
+        # FIXED: Proper type conversion and validation with enhanced safety
+        try:
+            balance = float(account_info.balance) if account_info.balance is not None else 0.0
+        except (ValueError, TypeError):
+            balance = 0.0
+            
+        try:
+            equity = float(account_info.equity) if account_info.equity is not None else 0.0
+        except (ValueError, TypeError):
+            equity = balance  # Use balance as fallback
+            
+        try:
+            margin = float(account_info.margin) if account_info.margin is not None else 0.0
+        except (ValueError, TypeError):
+            margin = 0.0
         
         risk_percentage = (total_risk / balance * 100) if balance > 0 else 0.0
         margin_level = (equity / margin * 100) if margin > 0 else 0.0
