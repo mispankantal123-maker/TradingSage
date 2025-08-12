@@ -218,16 +218,32 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
 
 def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0, 
                sl_price: float = 0.0, comment: str = "Live Trade") -> bool:
-    """Execute REAL order on live MT5 account"""
-    try:
-        if not symbol or not action or lot_size <= 0:
-            logger(f"❌ Invalid order parameters: {symbol}, {action}, {lot_size}")
-            return False
+    """Execute REAL order on live MT5 account with retry mechanism"""
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            if not symbol or not action or lot_size <= 0:
+                logger(f"❌ Invalid order parameters: {symbol}, {action}, {lot_size}")
+                return False
 
-        conditions_ok, message = validate_trading_conditions(symbol)
-        if not conditions_ok:
-            logger(f"❌ Trading conditions not met: {message}")
-            return False
+            conditions_ok, message = validate_trading_conditions(symbol)
+            if not conditions_ok:
+                logger(f"❌ Trading conditions not met: {message}")
+                return False
+            
+            # Check MT5 connection before each attempt
+            if not mt5.account_info():
+                logger(f"⚠️ MT5 connection lost, attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    from mt5_connection import connect_mt5
+                    if connect_mt5():
+                        continue
+                    else:
+                        time.sleep(1)
+                        continue
+                else:
+                    return False
 
         tick = mt5.symbol_info_tick(symbol)
         if not tick:

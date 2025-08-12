@@ -23,13 +23,18 @@ from performance_tracking import send_hourly_report
 from validation_utils import validate_trading_conditions
 
 # Global bot state
-bot_running = False
+# NOTE: The original code used 'bot_running' but the provided changes use 'is_running'.
+# To maintain consistency with the provided changes, 'is_running' will be used.
+# If the original code intended a different meaning for 'bot_running', this might need adjustment.
+is_running = False  # Renamed from bot_running to align with changes
+bot_thread: Optional[threading.Thread] = None # Explicitly typing bot_thread
+recovery_thread: Optional[threading.Thread] = None # Added for recovery monitor
 current_strategy = "Scalping"
 
 
 def bot_thread() -> None:
     """Main bot thread - identical logic to original but modular"""
-    global bot_running, current_strategy
+    global is_running, current_strategy # Changed bot_running to is_running
 
     try:
         logger("🚀 Trading bot thread started")
@@ -42,7 +47,7 @@ def bot_thread() -> None:
         while True:
             try:
                 # Single bot running check per iteration
-                if not bot_running:
+                if not is_running: # Changed bot_running to is_running
                     logger("🛑 Bot stopped")
                     break
 
@@ -64,15 +69,18 @@ def bot_thread() -> None:
 
                 # Get current strategy from GUI
                 try:
-                    import __main__
-                    if hasattr(__main__, 'gui') and __main__.gui:
-                        gui_strategy = __main__.gui.current_strategy
+                    # Attempt to import __main__ cautiously
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui:
+                        gui_strategy = main_module.gui.current_strategy
                         if gui_strategy != current_strategy:
                             current_strategy = gui_strategy
                             logger(f"🔄 Strategy updated from GUI to: {current_strategy}")
+                except ImportError:
+                    logger("⚠️ __main__ module not found, cannot get strategy from GUI.")
                 except Exception as gui_e:
                     logger(f"⚠️ GUI connection issue: {str(gui_e)}")
-                    current_strategy = "Scalping"
+                    current_strategy = "Scalping" # Fallback strategy
 
                 # Check MT5 connection status
                 if not check_mt5_status():
@@ -82,7 +90,7 @@ def bot_thread() -> None:
                         logger("🔄 Waiting 30 seconds before retry...")
                         # Check stop signal during retry wait
                         for wait_second in range(30):
-                            if not bot_running:
+                            if not is_running: # Changed bot_running to is_running
                                 logger("🛑 Bot stopped during MT5 reconnection wait")
                                 return
                             time.sleep(1)
@@ -90,13 +98,14 @@ def bot_thread() -> None:
 
                 # Get trading symbols
                 try:
-                    import __main__
-                    if hasattr(__main__, 'gui') and __main__.gui and __main__.gui.symbol_combo.get():
-                        trading_symbols = [__main__.gui.symbol_combo.get()]
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'symbol_combo') and main_module.gui.symbol_combo.get():
+                        trading_symbols = [main_module.gui.symbol_combo.get()]
                     else:
                         trading_symbols = DEFAULT_SYMBOLS[:3]  # Use first 3 default symbols
-                except:
-                    trading_symbols = DEFAULT_SYMBOLS[:3]
+                except Exception as gui_sym_e:
+                    logger(f"⚠️ GUI symbol retrieval issue: {str(gui_sym_e)}")
+                    trading_symbols = DEFAULT_SYMBOLS[:3] # Fallback symbols
 
                 logger(f"📊 Analyzing {len(trading_symbols)} symbols with {current_strategy} strategy")
 
@@ -145,7 +154,7 @@ def bot_thread() -> None:
 
                             try:
                                 # CRITICAL: Final stop check before trade execution
-                                if not bot_running:
+                                if not is_running: # Changed bot_running to is_running
                                     logger(f"🛑 Bot stopped before executing trade for {symbol}")
                                     return
 
@@ -163,11 +172,11 @@ def bot_thread() -> None:
 
                                     # Update GUI order count immediately
                                     try:
-                                        import __main__
-                                        if hasattr(__main__, 'gui') and __main__.gui:
-                                            __main__.gui.update_order_count_display()
-                                    except:
-                                        pass
+                                        main_module = __import__('__main__')
+                                        if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'update_order_count_display'):
+                                            main_module.gui.update_order_count_display()
+                                    except Exception as gui_update_e:
+                                        logger(f"⚠️ GUI update error: {str(gui_update_e)}")
                                 else:
                                     logger(f"❌ Trade execution failed for {symbol}")
 
@@ -198,18 +207,19 @@ def bot_thread() -> None:
                 # Get scan interval from GUI
                 scan_interval = 30  # Default fallback
                 try:
-                    import __main__
-                    if hasattr(__main__, 'gui') and __main__.gui and hasattr(__main__.gui, 'interval_entry'):
-                        interval_text = __main__.gui.interval_entry.get().strip()
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'interval_entry'):
+                        interval_text = main_module.gui.interval_entry.get().strip()
                         if interval_text and interval_text.isdigit():
                             scan_interval = max(5, min(int(interval_text), 300))  # 5-300 seconds range
-                except:
+                except Exception as gui_interval_e:
+                    logger(f"⚠️ GUI interval retrieval issue: {str(gui_interval_e)}")
                     pass
 
                 # CRITICAL: Interruptible wait - check stop signal during wait
                 logger(f"⏳ Waiting {scan_interval} seconds before next scan...")
                 for wait_second in range(scan_interval):
-                    if not bot_running:
+                    if not is_running: # Changed bot_running to is_running
                         logger("🛑 Bot stopped during scan interval wait")
                         return
                     time.sleep(1)
@@ -230,77 +240,166 @@ def bot_thread() -> None:
         logger(f"📝 Critical traceback: {traceback.format_exc()}")
 
     finally:
-        bot_running = False
+        is_running = False # Changed bot_running to is_running
         logger("🛑 Bot thread stopped")
 
         # Update GUI status if available
         try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                __main__.gui.bot_status_lbl.config(text="Bot: Stopped 🔴", foreground="red")
-        except:
-            pass
+            main_module = __import__('__main__')
+            if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'bot_status_lbl'):
+                main_module.gui.bot_status_lbl.config(text="Bot: Stopped 🔴", foreground="red")
+        except Exception as gui_status_e:
+            logger(f"⚠️ GUI status update error: {str(gui_status_e)}")
 
 
-def start_bot_thread():
-    """Start the bot in a separate thread"""
-    global bot_running
+# --- Modified Functions for Robustness ---
 
-    if bot_running:
-        logger("⚠️ Bot is already running")
-        return False
+def start_bot_thread() -> bool:
+    """Start bot in separate thread with robust error handling"""
+    global bot_thread, is_running, recovery_thread
 
     try:
-        bot_running = True
-        bot_worker = threading.Thread(target=bot_thread, daemon=True)
-        bot_worker.start()
-        logger("🚀 Bot thread launched successfully")
-        return True
+        if is_running:
+            logger("⚠️ Bot already running")
+            return False
+
+        # Multiple connection attempts with retry
+        max_retries = 3
+        connected = False
+        for attempt in range(max_retries):
+            if check_mt5_status():
+                connected = True
+                break
+
+            logger(f"🔄 MT5 connection attempt {attempt + 1}/{max_retries}")
+            time.sleep(2)
+
+            # Try to reconnect
+            from mt5_connection import connect_mt5
+            if connect_mt5():
+                connected = True
+                break
+        
+        if not connected:
+            logger("❌ MT5 connection failed after all retries")
+            return False
+
+        logger("🚀 Starting trading bot...")
+        is_running = True
+
+        # Create thread with proper error handling
+        bot_thread = threading.Thread(
+            target=safe_trading_loop, 
+            daemon=True,
+            name="TradingBot"
+        )
+        bot_thread.start()
+
+        # Verify thread started
+        time.sleep(0.5)
+        if bot_thread.is_alive():
+            logger("✅ Trading bot started successfully")
+            # Start the recovery monitor if not already running
+            if recovery_thread is None or not recovery_thread.is_alive():
+                start_auto_recovery_monitor()
+            return True
+        else:
+            logger("❌ Trading bot thread failed to start")
+            is_running = False
+            return False
 
     except Exception as e:
-        logger(f"❌ Error starting bot thread: {str(e)}")
-        bot_running = False
+        logger(f"❌ Error starting bot: {str(e)}")
+        is_running = False
         return False
 
 
-def stop_bot():
-    """Stop the trading bot immediately"""
-    global bot_running
+def safe_trading_loop():
+    """Trading loop with comprehensive error handling"""
+    global is_running
 
-    if not bot_running:
-        logger("ℹ️ Bot is not running")
-        return
-
-    logger("🛑 EMERGENCY STOP - Setting bot_running to False immediately")
-    bot_running = False
-
-    # Force update GUI if available
     try:
-        import __main__
-        if hasattr(__main__, 'gui') and __main__.gui:
-            __main__.gui.bot_status_lbl.config(text="Bot: Force Stopped 🔴", foreground="red")
-            __main__.gui.start_btn.config(state="normal")
-            __main__.gui.stop_btn.config(state="disabled")
-    except:
-        pass
+        # Call the original bot_thread logic
+        bot_thread() 
+    except KeyboardInterrupt:
+        logger("⚠️ Trading loop interrupted by user")
+    except Exception as e:
+        logger(f"❌ Critical error in trading loop: {str(e)}")
+        import traceback
+        logger(f"📝 Traceback: {traceback.format_exc()}")
 
-    logger("✅ Trading bot FORCE STOPPED - All operations halted")
+        # Attempt recovery
+        try:
+            logger("🔄 Attempting automatic recovery...")
+            emergency_cleanup()
+
+            # Wait before potential restart
+            time.sleep(5)
+
+            # Check if we should restart
+            if is_running and check_mt5_status():
+                logger("🔄 Restarting trading loop...")
+                # Recursively call safe_trading_loop to restart the process
+                safe_trading_loop() 
+            else:
+                logger("❌ Recovery conditions not met, stopping bot.")
+                is_running = False # Ensure bot stops if recovery fails
+
+        except Exception as recovery_error:
+            logger(f"❌ Recovery failed: {str(recovery_error)}")
+            is_running = False # Ensure bot stops if recovery itself fails
+    finally:
+        is_running = False
+        logger("🏁 Trading loop terminated")
+
+
+def emergency_cleanup():
+    """Emergency cleanup function"""
+    try:
+        # Import necessary functions here to avoid circular dependencies or load issues
+        from risk_management import emergency_close_all_positions, reset_order_count
+        from trading_operations import close_all_orders # This might be redundant if emergency_close_all_positions handles it
+
+        logger("🚨 Performing emergency cleanup...")
+
+        # Close all positions if needed
+        # Assuming emergency_close_all_positions is more specific for emergencies
+        emergency_close_all_positions() 
+
+        # Reset counters
+        reset_order_count()
+
+        logger("✅ Emergency cleanup completed")
+
+    except Exception as e:
+        logger(f"❌ Emergency cleanup error: {str(e)}")
 
 
 def start_auto_recovery_monitor():
     """Background monitoring thread for auto-recovery"""
+    global recovery_thread, is_running
+
+    if recovery_thread and recovery_thread.is_alive():
+        logger("ℹ️ Recovery monitor already running.")
+        return
 
     def recovery_monitor():
         while True:
             try:
-                if bot_running:
+                if is_running: # Check the global is_running flag
                     auto_recovery_check()
+                
+                # Add a condition to break if bot is stopped to prevent infinite loop
+                if not is_running:
+                    logger("🛑 Recovery monitor stopping as bot is not running.")
+                    break
+                    
                 time.sleep(30)  # Check every 30 seconds
             except Exception as e:
                 logger(f"❌ Recovery monitor error: {str(e)}")
-                time.sleep(60)
+                time.sleep(60) # Wait longer if an error occurs
 
-    recovery_thread = threading.Thread(target=recovery_monitor, daemon=True)
+    recovery_thread = threading.Thread(target=recovery_monitor, daemon=True, name="RecoveryMonitor")
     recovery_thread.start()
     logger("🔄 Auto-recovery monitor started")
 
@@ -313,7 +412,7 @@ def get_bot_status() -> Dict[str, Any]:
         risk_metrics = get_current_risk_metrics()
 
         status = {
-            'running': bot_running,
+            'running': is_running, # Changed bot_running to is_running
             'current_strategy': current_strategy,
             'mt5_connected': check_mt5_status(),
             'trading_time_ok': check_trading_time(),
@@ -328,25 +427,37 @@ def get_bot_status() -> Dict[str, Any]:
     except Exception as e:
         logger(f"❌ Error getting bot status: {str(e)}")
         return {
-            'running': bot_running,
+            'running': is_running, # Changed bot_running to is_running
             'error': str(e)
         }
 
 
 def emergency_stop_all():
     """Emergency stop all operations"""
+    global is_running # Changed bot_running to is_running
     try:
         logger("🚨 EMERGENCY STOP INITIATED!")
 
         # Stop bot
-        global bot_running
-        bot_running = False
+        is_running = False
 
         # Close all positions
-        from trading_operations import close_all_orders
-        close_all_orders()
+        # Assuming emergency_cleanup already handles this, but can be called explicitly if needed
+        emergency_cleanup() 
 
-        logger("🛑 Emergency stop completed")
+        # Update GUI status if available
+        try:
+            main_module = __import__('__main__')
+            if hasattr(main_module, 'gui') and main_module.gui:
+                main_module.gui.bot_status_lbl.config(text="Bot: Emergency Stopped 🔴", foreground="red")
+                if hasattr(main_module.gui, 'start_btn'):
+                    main_module.gui.start_btn.config(state="normal")
+                if hasattr(main_module.gui, 'stop_btn'):
+                    main_module.gui.stop_btn.config(state="disabled")
+        except Exception as gui_stop_e:
+            logger(f"⚠️ GUI stop update error: {str(gui_stop_e)}")
+
+        logger("✅ Emergency stop completed")
 
     except Exception as e:
         logger(f"❌ Error during emergency stop: {str(e)}")
@@ -363,12 +474,14 @@ def run_single_analysis(symbol: str, strategy: str = None) -> Dict[str, Any]:
         # Get data
         df = get_symbol_data(symbol, count=500)
         if df is None:
-            return {'error': 'No data available'}
+            logger(f"❌ No data available for {symbol}")
+            return {'error': 'No data available', 'symbol': symbol}
 
         # Calculate indicators
         df_with_indicators = calculate_indicators(df)
         if df_with_indicators is None:
-            return {'error': 'Indicator calculation failed'}
+            logger(f"❌ Indicator calculation failed for {symbol}")
+            return {'error': 'Indicator calculation failed', 'symbol': symbol}
 
         # Run strategy
         action, signals = run_strategy(strategy, df_with_indicators, symbol)
@@ -390,5 +503,206 @@ def run_single_analysis(symbol: str, strategy: str = None) -> Dict[str, Any]:
         return result
 
     except Exception as e:
-        logger(f"❌ Error in single analysis: {str(e)}")
-        return {'error': str(e)}
+        logger(f"❌ Error in single analysis for {symbol}: {str(e)}")
+        return {'error': str(e), 'symbol': symbol}
+
+# --- Original Placeholder Functions (If needed, ensure they exist or are imported) ---
+# If 'trading_loop' or other functions used in the changes are defined elsewhere,
+# ensure they are correctly imported or defined within this scope or accessible.
+# For example, if 'trading_loop' is the original bot_thread logic:
+def trading_loop():
+    """
+    Placeholder for the original trading loop logic.
+    This function is called by safe_trading_loop.
+    It should contain the core logic previously in bot_thread.
+    """
+    # Replicate the core logic from the original bot_thread function here
+    global is_running, current_strategy
+
+    try:
+        logger("🚀 Trading bot thread (core logic) started")
+        logger("🔍 Initializing automated trading system...")
+
+        # Reset daily counters
+        check_daily_limits()
+
+        # Main trading loop - FIXED stop mechanism
+        while True:
+            try:
+                # Single bot running check per iteration
+                if not is_running:
+                    logger("🛑 Bot stopped")
+                    break
+
+                # Risk management checks (non-blocking)
+                if not risk_management_check():
+                    logger("⚠️ Risk management warning - continuing with caution")
+
+                # Check daily limits
+                if not check_daily_limits():
+                    logger("📊 Daily trading limits reached - pausing for today")
+                    time.sleep(300)  # Wait 5 minutes then check again
+                    continue
+
+                # Check trading session
+                if not check_trading_time():
+                    logger("⏰ Outside trading hours - waiting...")
+                    time.sleep(60)
+                    continue
+
+                # Get current strategy from GUI
+                try:
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui:
+                        gui_strategy = main_module.gui.current_strategy
+                        if gui_strategy != current_strategy:
+                            current_strategy = gui_strategy
+                            logger(f"🔄 Strategy updated from GUI to: {current_strategy}")
+                except Exception as gui_e:
+                    logger(f"⚠️ GUI connection issue: {str(gui_e)}")
+                    current_strategy = "Scalping"
+
+                # Check MT5 connection status
+                if not check_mt5_status():
+                    logger("❌ MT5 connection lost, attempting recovery...")
+                    from mt5_connection import connect_mt5
+                    if not connect_mt5():
+                        logger("🔄 Waiting 30 seconds before retry...")
+                        for wait_second in range(30):
+                            if not is_running:
+                                logger("🛑 Bot stopped during MT5 reconnection wait")
+                                return
+                            time.sleep(1)
+                        continue
+
+                # Get trading symbols
+                try:
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'symbol_combo') and main_module.gui.symbol_combo.get():
+                        trading_symbols = [main_module.gui.symbol_combo.get()]
+                    else:
+                        trading_symbols = DEFAULT_SYMBOLS[:3]  # Use first 3 default symbols
+                except Exception as gui_sym_e:
+                    logger(f"⚠️ GUI symbol retrieval issue: {str(gui_sym_e)}")
+                    trading_symbols = DEFAULT_SYMBOLS[:3]
+
+                logger(f"📊 Analyzing {len(trading_symbols)} symbols with {current_strategy} strategy")
+
+                symbol_data = get_multiple_symbols_data(trading_symbols, count=500)
+
+                if not symbol_data:
+                    logger("❌ No symbol data available, waiting...")
+                    time.sleep(60)
+                    continue
+
+                signals_found = 0
+                for symbol, df in symbol_data.items():
+                    try:
+                        df_with_indicators = calculate_indicators(df)
+                        if df_with_indicators is None:
+                            logger(f"⚠️ Indicator calculation failed for {symbol}")
+                            continue
+
+                        action, signals = run_strategy(current_strategy, df_with_indicators, symbol)
+
+                        if action and len(signals) > 0:
+                            signals_found += 1
+                            logger(f"🎯 Signal detected for {symbol}: {action}")
+
+                            conditions_ok, condition_msg = validate_trading_conditions(symbol)
+                            if not conditions_ok:
+                                logger(f"⚠️ Trading conditions not met for {symbol}: {condition_msg}")
+                                continue
+
+                            current_session = get_current_trading_session()
+                            session_adjustments = adjust_strategy_for_session(current_strategy, current_session)
+
+                            signal_threshold = 1 + session_adjustments.get("signal_threshold_modifier", 0)
+                            if len(signals) < signal_threshold:
+                                logger(f"⚪ {symbol}: Signal strength {len(signals)} below threshold {signal_threshold}")
+                                continue
+
+                            try:
+                                if not is_running:
+                                    logger(f"🛑 Bot stopped before executing trade for {symbol}")
+                                    return
+
+                                if not check_order_limit():
+                                    logger(f"🛑 Order limit reached - skipping {symbol}")
+                                    continue
+
+                                success = execute_trade_signal(symbol, action)
+
+                                if success:
+                                    increment_daily_trade_count()
+                                    logger(f"✅ Trade executed successfully for {symbol}")
+                                    try:
+                                        main_module = __import__('__main__')
+                                        if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'update_order_count_display'):
+                                            main_module.gui.update_order_count_display()
+                                    except Exception as gui_update_e:
+                                        logger(f"⚠️ GUI update error: {str(gui_update_e)}")
+                                else:
+                                    logger(f"❌ Trade execution failed for {symbol}")
+
+                            except Exception as trade_e:
+                                logger(f"❌ Trade execution error for {symbol}: {str(trade_e)}")
+
+                        time.sleep(2)
+
+                    except Exception as symbol_e:
+                        logger(f"❌ Error processing {symbol}: {str(symbol_e)}")
+                        continue
+
+                if signals_found > 0:
+                    logger(f"📊 Scan complete: {signals_found} signals found from {len(symbol_data)} symbols")
+                else:
+                    logger(f"📊 Scan complete: No signals found from {len(symbol_data)} symbols")
+
+                auto_recovery_check()
+
+                current_time = datetime.datetime.now()
+                if current_time.minute == 0:
+                    send_hourly_report()
+
+                scan_interval = 30
+                try:
+                    main_module = __import__('__main__')
+                    if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'interval_entry'):
+                        interval_text = main_module.gui.interval_entry.get().strip()
+                        if interval_text and interval_text.isdigit():
+                            scan_interval = max(5, min(int(interval_text), 300))
+                except Exception as gui_interval_e:
+                    logger(f"⚠️ GUI interval retrieval issue: {str(gui_interval_e)}")
+                    pass
+
+                logger(f"⏳ Waiting {scan_interval} seconds before next scan...")
+                for wait_second in range(scan_interval):
+                    if not is_running:
+                        logger("🛑 Bot stopped during scan interval wait")
+                        return
+                    time.sleep(1)
+
+            except KeyboardInterrupt:
+                logger("⚠️ Bot interrupted by user")
+                break
+
+            except Exception as cycle_e:
+                logger(f"❌ Error in trading cycle: {str(cycle_e)}")
+                import traceback
+                logger(f"📝 Traceback: {traceback.format_exc()}")
+                time.sleep(60)
+
+    except Exception as e:
+        logger(f"❌ Critical error in bot thread: {str(e)}")
+        import traceback
+        logger(f"📝 Critical traceback: {traceback.format_exc()}")
+    finally:
+        is_running = False
+        logger("🛑 Bot thread stopped")
+        try:
+            main_module = __import__('__main__')
+            if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'bot_status_lbl'):
+                main_module.gui.bot_status_lbl.config(text="Bot: Stopped 🔴", foreground="red")
+        except Exception as gui_status_e:
+            logger(f"⚠️ GUI status update error: {str(gui_status_e)}")

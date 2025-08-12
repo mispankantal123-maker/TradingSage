@@ -17,38 +17,52 @@ except ImportError:
     import mt5_mock as mt5
     print("⚠️ Risk Management using mock for development")
 
-# Global risk tracking
+# Global risk tracking with thread safety
+import threading
+_risk_lock = threading.Lock()
 daily_trade_count = 0
 session_start_time = datetime.datetime.now().date()
 max_orders_limit = DEFAULT_MAX_ORDERS
 
 
 def check_order_limit() -> bool:
-    """Check if order limit is reached"""
+    """Check if order limit is reached - thread-safe"""
     try:
-        global max_orders_limit
-        
-        # Get current order count from GUI
-        current_orders = 0
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                current_orders = __main__.gui.order_count
-        except:
-            pass
-        
-        # Also check actual MT5 positions
-        positions = mt5.positions_get()
-        actual_positions = len(positions) if positions else 0
-        
-        # Use the higher of the two counts for safety
-        total_orders = max(current_orders, actual_positions)
-        
-        if total_orders >= max_orders_limit:
-            logger(f"🛑 Order limit reached: {total_orders}/{max_orders_limit}")
-            return False
+        with _risk_lock:
+            global max_orders_limit
             
-        return True
+            # Get current order count from GUI
+            current_orders = 0
+            try:
+                import __main__
+                if hasattr(__main__, 'gui') and __main__.gui:
+                    current_orders = __main__.gui.order_count
+            except:
+                pass
+            
+            # Also check actual MT5 positions with retry
+            max_retries = 3
+            actual_positions = 0
+            
+            for attempt in range(max_retries):
+                try:
+                    positions = mt5.positions_get()
+                    actual_positions = len(positions) if positions else 0
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        logger(f"⚠️ Failed to get positions after {max_retries} attempts: {e}")
+                    else:
+                        time.sleep(0.1)
+            
+            # Use the higher of the two counts for safety
+            total_orders = max(current_orders, actual_positions)
+            
+            if total_orders >= max_orders_limit:
+                logger(f"🛑 Order limit reached: {total_orders}/{max_orders_limit}")
+                return False
+                
+            return True
         
     except Exception as e:
         logger(f"❌ Error checking order limit: {str(e)}")
@@ -166,24 +180,35 @@ def check_daily_limits() -> bool:
 
 
 def increment_daily_trade_count() -> None:
-    """Increment daily trade counter"""
+    """Increment daily trade counter - thread-safe"""
     global daily_trade_count
     
     try:
-        daily_trade_count += 1
-        logger(f"📊 Daily trades: {daily_trade_count}/{MAX_DAILY_TRADES}")
-        
-        # Update GUI if available
-        try:
-            import __main__
-            if hasattr(__main__, 'gui') and __main__.gui:
-                __main__.gui.order_count += 1
-                __main__.gui.update_order_count_display()
-        except:
-            pass
+        with _risk_lock:
+            daily_trade_count += 1
+            logger(f"📊 Daily trades: {daily_trade_count}/{MAX_DAILY_TRADES}")
+            
+            # Update GUI if available (schedule on main thread)
+            try:
+                import __main__
+                if hasattr(__main__, 'gui') and __main__.gui and __main__.gui.root:
+                    __main__.gui.root.after(0, lambda: safe_update_gui_count())
+            except:
+                pass
         
     except Exception as e:
         logger(f"❌ Error incrementing trade count: {str(e)}")
+
+
+def safe_update_gui_count():
+    """Safely update GUI count on main thread"""
+    try:
+        import __main__
+        if hasattr(__main__, 'gui') and __main__.gui:
+            __main__.gui.order_count += 1
+            __main__.gui.update_order_count_display()
+    except Exception as e:
+        logger(f"⚠️ GUI update error: {str(e)}")
 
 
 def calculate_position_size(symbol: str, risk_amount: float, stop_loss_pips: float) -> float:
