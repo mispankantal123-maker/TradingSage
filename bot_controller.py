@@ -146,8 +146,8 @@ def main_trading_loop() -> None:
                             current_session = get_current_trading_session()
                             session_adjustments = adjust_strategy_for_session(current_strategy, current_session)
 
-                            # FIXED: Apply more lenient signal filtering for live trading
-                            signal_threshold = 1 + session_adjustments.get("signal_threshold_modifier", 0)
+                            # LIVE TRADING: More aggressive signal acceptance
+                            signal_threshold = max(1, 1 + session_adjustments.get("signal_threshold_modifier", 0))
                             if len(signals) < signal_threshold:
                                 logger(f"⚪ {symbol}: Signal strength {len(signals)} below threshold {signal_threshold}")
                                 continue

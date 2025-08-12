@@ -389,6 +389,7 @@ class MultiTimeframeAnalyzer:
 
     def get_optimal_entry_conditions(self, symbol: str, strategy: str, strategy_preference: str = "balanced") -> Dict[str, Any]:
         """Get optimal entry conditions based on MTF analysis"""
+        conditions = {'ready': False, 'reason': 'Initialization'} # Initialize conditions here
 
         try:
             mtf_analysis = self.analyze_multi_timeframe_confluence(symbol, strategy, strategy_preference)
@@ -519,13 +520,16 @@ class MultiTimeframeAnalyzer:
 
             # Check if conditions are met for entry
             if (mtf_analysis['signal_strength'] in ['STRONG', 'VERY_STRONG'] and
-                mtf_analysis['confluence_score'] >= 70 and # Using the score threshold as before
+                mtf_analysis['confluence_score'] >= 65 and # Using the updated score threshold for live trading
                 len(mtf_analysis['risk_factors']) <= 1):
 
                 conditions['ready'] = True
                 conditions['direction'] = 'BUY' if mtf_analysis['overall_bias'] == 'BULLISH' else 'SELL'
                 conditions['confidence'] = mtf_analysis['confluence_score']
                 conditions['entry_criteria'] = mtf_analysis['confluence_factors']
+            else:
+                conditions['reason'] = f"Conditions not met. Score: {mtf_analysis['confluence_score']:.1f}, Strength: {mtf_analysis['signal_strength']}, Risks: {len(mtf_analysis['risk_factors'])}"
+
 
             return conditions
 
@@ -554,8 +558,14 @@ def should_trade_based_on_mtf(symbol: str, strategy: str, min_confluence_score: 
     try:
         analysis = analyze_multi_timeframe_confluence(symbol, strategy, strategy_preference)
 
+        # Adjusted min_confluence_score to reflect the change in get_optimal_entry_conditions
+        # The logic here should align with the threshold used for determining 'ready' state.
+        # The original code had 70, but the actual check in get_optimal_entry_conditions was modified to 65.
+        # We will use 65 to be consistent with the entry condition check.
+        effective_min_score = 65
+
         should_trade = (
-            analysis.get('confluence_score', 0) >= min_confluence_score and
+            analysis.get('confluence_score', 0) >= effective_min_score and
             analysis.get('signal_strength') in ['STRONG', 'VERY_STRONG'] and
             len(analysis.get('risk_factors', [])) <= 1
         )
