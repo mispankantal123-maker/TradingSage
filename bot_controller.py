@@ -245,7 +245,7 @@ def main_trading_loop() -> None:
                     send_hourly_report()
 
                 # Get scan interval from GUI
-                scan_interval = 30  # Default fallback
+                scan_interval = 15  # More aggressive scanning
                 try:
                     main_module = __import__('__main__')
                     if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'interval_entry'):
@@ -743,7 +743,7 @@ def trading_loop():
                 if current_time.minute == 0:
                     send_hourly_report()
 
-                scan_interval = 30
+                scan_interval = 15  # More aggressive scanning
                 try:
                     main_module = __import__('__main__')
                     if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'interval_entry'):

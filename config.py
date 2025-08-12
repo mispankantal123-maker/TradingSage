@@ -9,14 +9,14 @@ STRATEGIES = ["Scalping", "Intraday", "Arbitrage", "HFT"]
 # Default Trading Parameters with Enhanced Options
 DEFAULT_PARAMS = {
     "Scalping": {
-        "tp_pips": "25",      # Increased TP for more profit per trade
+        "tp_pips": "15",      # Faster TP for more frequent trades
         "sl_pips": "8",       # Tighter SL for better R:R
         "tp_unit": "pips",
         "sl_unit": "pips",
-        "lot_size": "0.02",   # Doubled lot size for more profit
+        "lot_size": "0.01",   # Smaller lot for more aggressive trading
         "signal_threshold": 1, # Lower threshold for more opportunities
-        "min_spread": 0.3,    # Tighter spread requirements
-        "max_spread": 4.0     # Better execution
+        "min_spread": 0.1,    # Very tight spread requirements
+        "max_spread": 25.0    # Allow wider spreads for more opportunities
     },
     "Intraday": {
         "tp_pips": "50",
