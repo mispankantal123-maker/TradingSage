@@ -368,8 +368,8 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Price in upper BB range but falling")
             sell_signals += 1
 
-        # BALANCED signal threshold with BUY bias
-        signal_threshold = 1
+        # AGGRESSIVE signal threshold for more opportunities
+        signal_threshold = 1  # Lower threshold = more trades = more profit potential
 
         # IMPROVED: Balanced signal decision with slight BUY preference
         action = None

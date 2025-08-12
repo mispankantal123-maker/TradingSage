@@ -9,14 +9,14 @@ STRATEGIES = ["Scalping", "Intraday", "Arbitrage", "HFT"]
 # Default Trading Parameters with Enhanced Options
 DEFAULT_PARAMS = {
     "Scalping": {
-        "tp_pips": "20",
-        "sl_pips": "10", 
+        "tp_pips": "25",      # Increased TP for more profit per trade
+        "sl_pips": "8",       # Tighter SL for better R:R
         "tp_unit": "pips",
         "sl_unit": "pips",
-        "lot_size": "0.01",
-        "signal_threshold": 2,
-        "min_spread": 0.5,
-        "max_spread": 5.0
+        "lot_size": "0.02",   # Doubled lot size for more profit
+        "signal_threshold": 1, # Lower threshold for more opportunities
+        "min_spread": 0.3,    # Tighter spread requirements
+        "max_spread": 4.0     # Better execution
     },
     "Intraday": {
         "tp_pips": "50",
@@ -39,16 +39,16 @@ DEFAULT_PARAMS = {
         "max_spread": 3.0
     },
     "HFT": {
-        "tp_pips": "5",  # HFT: Small TP for quick profits
-        "sl_pips": "3",  # HFT: Tight SL for risk control
+        "tp_pips": "8",      # Increased TP for more profit
+        "sl_pips": "4",      # Adjusted SL (2:1 ratio)
         "tp_unit": "pips",
         "sl_unit": "pips",
-        "lot_size": "0.01",
-        "signal_threshold": 3,  # Higher threshold for HFT precision
-        "min_spread": 0.2,  # Very tight spread requirements
-        "max_spread": 2.0,  # Max spread for HFT
+        "lot_size": "0.03",  # Tripled lot size for HFT
+        "signal_threshold": 1, # Lower threshold for more trades
+        "min_spread": 0.1,   # Ultra tight spreads
+        "max_spread": 1.5,   # Maximum spread for HFT
         "display_name": "HIGH FREQUENCY TRADING (HFT)",
-        "description": "Ultra-fast micro movements trading with tight TP/SL"
+        "description": "Ultra-fast micro movements trading optimized for profit"
     }
 }
 

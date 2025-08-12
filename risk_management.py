@@ -28,7 +28,7 @@ current_order_count = 0
 def get_order_limit_status() -> Dict[str, Any]:
     """Get current order limit status"""
     global current_order_count, max_orders_limit
-    
+
     return {
         "current_count": current_order_count,
         "max_limit": max_orders_limit,
