@@ -262,38 +262,63 @@ def run_headless_mode():
         logger(f"❌ Headless mode error: {str(e)}")
 
 
-if __name__ == "__main__":
+def professional_main():
+    """Professional main with universal symbol support and Windows optimization"""
     try:
-        # For Replit environment, check if GUI is available
-        # Default to headless mode in cloud environments
-        if os.environ.get('REPLIT_ENVIRONMENT') or os.environ.get('REPL_ID'):
-            print("🌐 Detected Replit environment - running in headless mode")
+        logger("🚀 STARTING PROFESSIONAL MT5 TRADING BOT...")
+        
+        # Professional system initialization
+        try:
+            from professional_trading_initializer import initialize_professional_trading, print_initialization_report
+            
+            # Initialize all systems
+            init_result = initialize_professional_trading()
+            
+            # Print detailed report
+            print_initialization_report()
+            
+            if not init_result['success']:
+                logger("❌ System initialization failed")
+                logger("🔄 Attempting fallback mode...")
+        except Exception as init_e:
+            logger(f"⚠️ Professional initializer error: {str(init_e)}")
+            logger("🔄 Using standard initialization...")
+            
+        # Determine mode based on environment and arguments
+        if len(sys.argv) > 1 and sys.argv[1] == '--headless':
+            logger("💻 Starting in HEADLESS mode (Production)")
             run_headless_mode()
-        elif len(sys.argv) > 1 and sys.argv[1] == "--headless":
+        elif os.environ.get('HEADLESS', '').lower() == 'true':
+            logger("💻 Auto-detected HEADLESS mode")
+            run_headless_mode()
+        elif os.environ.get('REPLIT_ENVIRONMENT') or os.environ.get('REPL_ID'):
+            logger("🌐 Detected Replit environment - running in headless mode")
             run_headless_mode()
         else:
+            logger("🖥️ Starting in GUI mode (Development)")
             # Try GUI mode, fallback to headless if display not available
             try:
                 import tkinter as tk
-                # Test if display is available
                 test_root = tk.Tk()
                 test_root.withdraw()
                 test_root.destroy()
                 run_application()
             except Exception as gui_e:
-                print(f"🖥️ GUI not available ({str(gui_e)}), falling back to headless mode")
+                logger(f"🖥️ GUI not available ({str(gui_e)}), falling back to headless mode")
                 run_headless_mode()
             
-    except Exception as startup_e:
-        print(f"STARTUP ERROR: {str(startup_e)}")
-        # Don't wait for input in cloud environments
-        if not (os.environ.get('REPLIT_ENVIRONMENT') or os.environ.get('REPL_ID')):
-            input("Press Enter to exit...")
     except KeyboardInterrupt:
-        print("\nApplication interrupted by user")
-    finally:
-        # Ensure clean exit
+        logger("🛑 Application interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        logger(f"❌ Critical application error: {str(e)}")
+        logger("🔄 Attempting emergency fallback...")
         try:
-            sys.exit(0)
+            run_headless_mode()
         except:
-            os._exit(0)
+            logger("💥 Emergency fallback failed - system shutdown")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    professional_main()
