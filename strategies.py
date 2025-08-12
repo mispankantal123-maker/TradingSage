@@ -401,24 +401,24 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             signals.append("Price in upper BB range but falling")
             sell_signals += 1
 
-        # AGGRESSIVE signal threshold for more opportunities
-        signal_threshold = 1  # Lower threshold = more trades = more profit potential
+        # ULTRA-AGGRESSIVE signal threshold for maximum opportunities
+        signal_threshold = 0  # Zero threshold = trade on any signal = maximum profits
 
-        # IMPROVED: Balanced signal decision with slight BUY preference
+        # ULTRA-AGGRESSIVE signal decision with strong BUY preference
         action = None
 
-        # Strong signals (3+ difference)
-        if buy_signals >= sell_signals + 3:
+        # Strong signals (2+ difference - lowered from 3)
+        if buy_signals >= sell_signals + 2:
             action = "BUY"
-            logger(f"🟢 SCALPING STRONG BUY for {symbol}: {buy_signals} buy vs {sell_signals} sell")
-        elif sell_signals >= buy_signals + 3:
+            logger(f"🟢 SCALPING ULTRA-STRONG BUY for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals >= buy_signals + 3:  # Higher threshold for sells
             action = "SELL"
             logger(f"🔴 SCALPING STRONG SELL for {symbol}: {sell_signals} sell vs {buy_signals} buy")
-        # Medium signals (1-2 difference)
-        elif buy_signals > sell_signals and buy_signals >= signal_threshold:
+        # Any positive signal gets executed (ultra-aggressive)
+        elif buy_signals > sell_signals:
             action = "BUY"
-            logger(f"🟢 SCALPING BUY Signal for {symbol}: {buy_signals} buy vs {sell_signals} sell")
-        elif sell_signals > buy_signals and sell_signals >= signal_threshold:
+            logger(f"🟢 SCALPING AGGRESSIVE BUY for {symbol}: {buy_signals} buy vs {sell_signals} sell")
+        elif sell_signals > buy_signals + 1:  # Need +1 advantage for sells
             action = "SELL"
             logger(f"🔴 SCALPING SELL Signal for {symbol}: {sell_signals} sell vs {buy_signals} buy")
         # Equal signals - use multiple tiebreakers
@@ -434,27 +434,41 @@ def scalping_strategy(df: pd.DataFrame, symbol: str, current_tick, digits: int, 
             else:
                 action = "SELL"
                 logger(f"🔴 SCALPING SELL (Tiebreaker) for {symbol}: Equal signals, price falling")
-        # Backup signal generation
+        # ULTRA-AGGRESSIVE backup signal generation (always find a trade)
         else:
-            # Check for any bullish indicators
+            # Check for any bullish indicators with ultra-low threshold
             bullish_factors = 0
+            bearish_factors = 0
+            
             if last['close'] > prev['close']:
-                bullish_factors += 1
+                bullish_factors += 2  # Double weight for price momentum
+            else:
+                bearish_factors += 1
+                
             if last['EMA8'] > last['EMA20']:
                 bullish_factors += 1
-            if last['RSI'] > 50:
-                bullish_factors += 1
-
-            if bullish_factors >= 2:
-                signals.append("Backup signal: Multiple bullish factors")
-                action = "BUY"
-                logger(f"🟢 SCALPING BUY (Backup) for {symbol}: {bullish_factors} bullish factors")
-            elif bullish_factors == 0:
-                signals.append("Backup signal: Bearish conditions")
-                action = "SELL"
-                logger(f"🔴 SCALPING SELL (Backup) for {symbol}: No bullish factors")
             else:
-                logger(f"⚪ SCALPING No signal for {symbol}: {buy_signals} buy, {sell_signals} sell")
+                bearish_factors += 1
+                
+            if last['RSI'] > 45:  # Lowered from 50
+                bullish_factors += 1
+            elif last['RSI'] < 55:
+                bearish_factors += 1
+
+            # Ultra-aggressive: Trade on ANY factor (lowered from 2)
+            if bullish_factors >= 1:
+                signals.append("Ultra-aggressive backup: Any bullish factor")
+                action = "BUY"
+                logger(f"🟢 SCALPING ULTRA-BUY (Backup) for {symbol}: {bullish_factors} bullish factors")
+            elif bearish_factors >= 2:  # Higher threshold for sells
+                signals.append("Backup signal: Strong bearish conditions")
+                action = "SELL"
+                logger(f"🔴 SCALPING SELL (Backup) for {symbol}: {bearish_factors} bearish factors")
+            else:
+                # Force a BUY if no clear direction (ultra-aggressive bull bias)
+                signals.append("Ultra-aggressive: Force bullish bias")
+                action = "BUY"
+                logger(f"🟢 SCALPING FORCE-BUY for {symbol}: Default bullish bias")
 
         return action, signals
 

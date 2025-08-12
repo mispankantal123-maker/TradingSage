@@ -23,13 +23,13 @@ class AdvancedSignalOptimizer:
     """Ultra-advanced signal optimizer untuk 85%+ win rate"""
     
     def __init__(self):
-        # Advanced confidence thresholds
+        # ULTRA-AGGRESSIVE confidence levels for maximum opportunities
         self.confidence_levels = {
-            'ULTRA_HIGH': 0.90,  # 90%+ confidence - max position size
-            'VERY_HIGH': 0.85,   # 85%+ confidence - high position size  
-            'HIGH': 0.78,        # 78%+ confidence - normal position size
-            'MODERATE': 0.70,    # 70%+ confidence - reduced position size
-            'LOW': 0.60          # Below this = no trade
+            'ULTRA_HIGH': 0.75,  # 75%+ confidence - max position size (lowered)
+            'VERY_HIGH': 0.65,   # 65%+ confidence - high position size (lowered)
+            'HIGH': 0.55,        # 55%+ confidence - normal position size (lowered)
+            'MODERATE': 0.45,    # 45%+ confidence - reduced position size (lowered)
+            'LOW': 0.35          # 35%+ minimum for trade (ultra-aggressive)
         }
         
         # Advanced pattern recognition weights
@@ -42,13 +42,13 @@ class AdvancedSignalOptimizer:
             'session_bias': 0.10            # 10% weight
         }
         
-        # Advanced filtering criteria
+        # ULTRA-AGGRESSIVE filtering criteria (more permissive)
         self.quality_filters = {
-            'min_volume_ratio': 1.5,         # Minimum volume spike
-            'min_atr_movement': 0.3,         # Minimum volatility
-            'max_spread_ratio': 2.0,         # Maximum spread vs normal
-            'min_trend_strength': 0.7,       # Minimum trend clarity
-            'correlation_alignment': 0.8     # Cross-pair correlation
+            'min_volume_ratio': 1.0,         # Reduced volume requirement
+            'min_atr_movement': 0.1,         # Much lower volatility requirement
+            'max_spread_ratio': 4.0,         # Allow wider spreads
+            'min_trend_strength': 0.3,       # Much lower trend requirement
+            'correlation_alignment': 0.5     # More relaxed correlation
         }
 
     def optimize_signal_quality(self, symbol: str, strategy: str, df: pd.DataFrame, 
@@ -718,15 +718,15 @@ class AdvancedSignalOptimizer:
             return 'LOW'
 
     def _get_position_multiplier(self, quality_level: str) -> float:
-        """Get position size multiplier based on quality"""
+        """Get ULTRA-AGGRESSIVE position size multipliers"""
         multipliers = {
-            'ULTRA_HIGH': 2.0,   # 200% of base size
-            'VERY_HIGH': 1.5,    # 150% of base size
-            'HIGH': 1.2,         # 120% of base size
-            'MODERATE': 1.0,     # 100% of base size
-            'LOW': 0.5           # 50% of base size
+            'ULTRA_HIGH': 3.0,   # 300% of base size (increased)
+            'VERY_HIGH': 2.5,    # 250% of base size (increased)
+            'HIGH': 2.0,         # 200% of base size (increased)
+            'MODERATE': 1.5,     # 150% of base size (increased)
+            'LOW': 1.2           # 120% of base size (increased from 0.5)
         }
-        return multipliers.get(quality_level, 1.0)
+        return multipliers.get(quality_level, 1.5)
 
     def _get_tp_multiplier(self, quality_level: str) -> float:
         """Get take profit multiplier based on quality"""

@@ -504,15 +504,15 @@ def combine_analysis_results(mtf_signals: Dict, tech_signals: Dict,
         
         final_confidence = base_confidence * risk_multiplier.get(risk_assessment['risk_level'], 0.5)
         
-        # Strategy-specific confidence threshold
+        # ULTRA-AGGRESSIVE confidence thresholds for maximum opportunities
         confidence_thresholds = {
-            'Scalping': 0.7,
-            'HFT': 0.8,
-            'Intraday': 0.6,
-            'Arbitrage': 0.75
+            'Scalping': 0.45,   # Reduced from 0.7 - more trades
+            'HFT': 0.55,        # Reduced from 0.8 - ultra-aggressive
+            'Intraday': 0.40,   # Reduced from 0.6 - more positions
+            'Arbitrage': 0.50   # Reduced from 0.75 - faster entries
         }
         
-        min_confidence = confidence_thresholds.get(strategy, 0.7)
+        min_confidence = confidence_thresholds.get(strategy, 0.45)
         
         # Final decision
         if final_confidence >= min_confidence and signal is not None:

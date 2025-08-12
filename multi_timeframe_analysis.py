@@ -552,7 +552,7 @@ def get_optimal_entry_conditions(symbol: str, strategy: str, strategy_preference
     return mtf_analyzer.get_optimal_entry_conditions(symbol, strategy, strategy_preference)
 
 
-def should_trade_based_on_mtf(symbol: str, strategy: str, min_confluence_score: float = 70, strategy_preference: str = "balanced") -> Tuple[bool, str, Dict]:
+def should_trade_based_on_mtf(symbol: str, strategy: str, min_confluence_score: int = 35, strategy_preference: str = "balanced") -> Tuple[bool, Optional[str], Dict[str, Any]]:
     """Check if should trade based on multi-timeframe analysis"""
 
     try:

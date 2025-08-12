@@ -23,14 +23,14 @@ class ConfidenceCalibrationSystem:
     """Ultra-advanced confidence calibration untuk maximum win rate"""
     
     def __init__(self):
-        # Dynamic confidence thresholds (self-adjusting)
+        # ULTRA-AGGRESSIVE confidence thresholds (more trading opportunities)
         self.dynamic_thresholds = {
             'Scalping': {
-                'ultra_high': 0.92,     # 92%+ for max position
-                'very_high': 0.87,      # 87%+ for high position
-                'high': 0.82,           # 82%+ for normal position
-                'moderate': 0.75,       # 75%+ for reduced position
-                'minimum': 0.68         # 68% minimum for any trade
+                'ultra_high': 0.85,     # 85%+ for max position (lowered)
+                'very_high': 0.75,      # 75%+ for high position (lowered)
+                'high': 0.65,           # 65%+ for normal position (lowered)
+                'moderate': 0.55,       # 55%+ for reduced position (lowered)
+                'minimum': 0.45         # 45% minimum for any trade (ultra-aggressive)
             },
             'Intraday': {
                 'ultra_high': 0.90,
@@ -500,13 +500,15 @@ class ConfidenceCalibrationSystem:
             # Simplified historical adjustment
             # In real implementation, this would use actual performance data
             
-            # Conservative adjustment for high confidence signals
-            if confidence > 0.9:
-                return 0.95  # Slight reduction for very high confidence
-            elif confidence > 0.8:
-                return 1.0   # No adjustment
+            # ULTRA-AGGRESSIVE confidence boosting
+            if confidence > 0.8:
+                return 1.15  # 15% boost for high confidence (instead of reduction)
+            elif confidence > 0.6:
+                return 1.25  # 25% boost for moderate confidence  
+            elif confidence > 0.4:
+                return 1.35  # 35% boost for lower confidence
             else:
-                return 1.05  # Slight boost for moderate confidence
+                return 1.5   # 50% boost for very low confidence
                 
         except Exception as e:
             logger(f"❌ Historical calibration error: {str(e)}")
