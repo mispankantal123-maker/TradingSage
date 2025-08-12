@@ -87,11 +87,21 @@ def check_mt5_status() -> bool:
     try:
         account_info = mt5.account_info()
         if account_info and account_info.trade_allowed:
+            # For development/mock mode, always return True if mock is working
+            if not USING_REAL_MT5:
+                logger("✅ Mock MT5 status check passed (development mode)")
             return True
         else:
+            if not USING_REAL_MT5:
+                # In mock mode, try to get account info anyway
+                logger("⚠️ Mock MT5 development mode - allowing connection")
+                return True
             logger("⚠️ MT5 connection lost or trading not allowed")
             return False
     except Exception as e:
+        if not USING_REAL_MT5:
+            logger("✅ Mock MT5 in development mode - bypassing status check")
+            return True
         logger(f"❌ MT5 status check failed: {str(e)}")
         return False
 

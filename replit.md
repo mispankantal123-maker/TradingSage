@@ -6,8 +6,15 @@ This project is a professional-grade algorithmic trading platform for MetaTrader
 ### User Preferences
 **Communication Style**: Simple, everyday language
 **Target Platform**: Windows OS with MetaTrader 5 for live trading
-**Development Environment**: Cross-platform support via mock MT5
+**Development Environment**: Cross-platform support via mock MT5, optimized for Replit cloud environment
 **Code Organization**: Modular, maintainable, production-ready
+
+### Recent Changes (August 2025)
+- **Replit Migration**: Successfully migrated from Replit Agent to Replit environment
+- **Headless Mode**: Implemented automatic headless mode detection for cloud environments
+- **Mock MT5 Integration**: Enhanced mock MT5 to work seamlessly in development mode
+- **Dependencies**: Added scipy for advanced technical analysis and python-telegram-bot for notifications
+- **Auto-deployment**: Configured automatic startup in Replit with MT5 mock fallback
 
 ### System Architecture
 The system employs a modular architecture, refactoring a monolithic application into specialized components for enhanced maintainability and scalability.

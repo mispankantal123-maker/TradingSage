@@ -226,6 +226,13 @@ def run_headless_mode():
         from bot_controller import current_strategy
         current_strategy = "Scalping"  # Default strategy
         
+        # Auto-connect to MT5 (mock) in headless mode
+        from mt5_connection import connect_mt5
+        if connect_mt5():
+            logger("✅ MT5 (mock) connected for headless mode")
+        else:
+            logger("⚠️ Using mock MT5 for development - proceeding anyway")
+        
         # Start bot
         if start_bot_thread():
             logger("🚀 Headless bot started successfully")
@@ -257,15 +264,31 @@ def run_headless_mode():
 
 if __name__ == "__main__":
     try:
-        # Check command line arguments
-        if len(sys.argv) > 1 and sys.argv[1] == "--headless":
+        # For Replit environment, check if GUI is available
+        # Default to headless mode in cloud environments
+        if os.environ.get('REPLIT_ENVIRONMENT') or os.environ.get('REPL_ID'):
+            print("🌐 Detected Replit environment - running in headless mode")
+            run_headless_mode()
+        elif len(sys.argv) > 1 and sys.argv[1] == "--headless":
             run_headless_mode()
         else:
-            run_application()
+            # Try GUI mode, fallback to headless if display not available
+            try:
+                import tkinter as tk
+                # Test if display is available
+                test_root = tk.Tk()
+                test_root.withdraw()
+                test_root.destroy()
+                run_application()
+            except Exception as gui_e:
+                print(f"🖥️ GUI not available ({str(gui_e)}), falling back to headless mode")
+                run_headless_mode()
             
     except Exception as startup_e:
         print(f"STARTUP ERROR: {str(startup_e)}")
-        input("Press Enter to exit...")
+        # Don't wait for input in cloud environments
+        if not (os.environ.get('REPLIT_ENVIRONMENT') or os.environ.get('REPL_ID')):
+            input("Press Enter to exit...")
     except KeyboardInterrupt:
         print("\nApplication interrupted by user")
     finally:

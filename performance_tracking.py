@@ -232,6 +232,25 @@ def calculate_win_rate() -> Dict[str, float]:
         return {'win_rate': 0, 'total_trades': 0, 'winning_trades': 0}
 
 
+def add_trade_to_tracking(symbol: str, action: str, profit: float, lot_size: float):
+    """Add trade result to performance tracking and drawdown management"""
+    try:
+        # Track in performance system
+        track_trade_performance(symbol, action, 0.0, profit=profit)
+        
+        # Also add to drawdown tracking if available
+        try:
+            from drawdown_manager import add_trade_result
+            add_trade_result(symbol, action, profit, lot_size)
+        except ImportError:
+            logger("⚠️ Drawdown manager not available for trade tracking")
+        
+        logger(f"📊 Trade tracked: {symbol} {action} P&L: ${profit:.2f}")
+        
+    except Exception as e:
+        logger(f"❌ Error adding trade to tracking: {str(e)}")
+
+
 def get_daily_summary() -> Dict[str, Any]:
     """Get comprehensive daily trading summary"""
     try:
