@@ -61,24 +61,22 @@ def get_daily_order_limit_status() -> Dict[str, Any]:
         if today != last_reset_date:
             daily_trade_count = 0
             last_reset_date = today
-            logger("🔄 Daily order count reset for new day")
 
         percentage_used = (daily_trade_count / max_daily_orders * 100) if max_daily_orders > 0 else 0
 
         return {
-            'daily_count': daily_trade_count,
-            'daily_limit': max_daily_orders,
-            'percentage_used': percentage_used,
+            'current_daily_count': daily_trade_count,
+            'max_daily_limit': max_daily_orders,
+            'daily_percentage_used': percentage_used,
             'orders_remaining': max(0, max_daily_orders - daily_trade_count),
             'reset_date': last_reset_date.strftime('%Y-%m-%d')
         }
 
     except Exception as e:
-        logger(f"❌ Error getting daily order limit status: {str(e)}")
         return {
-            'daily_count': 0,
-            'daily_limit': 50,
-            'percentage_used': 0,
+            'current_daily_count': 0,
+            'max_daily_limit': 50,
+            'daily_percentage_used': 0,
             'orders_remaining': 50,
             'reset_date': datetime.date.today().strftime('%Y-%m-%d')
         }

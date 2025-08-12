@@ -276,7 +276,7 @@ def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_va
             # Update performance tracking
             try:
                 from performance_tracking import add_trade_to_tracking
-                add_trade_to_tracking(result, symbol, action, strategy)
+                add_trade_to_tracking(symbol, action, 0.0, lot_size)  # Fixed parameters
             except Exception as e:
                 logger(f"⚠️ Performance tracking failed: {str(e)}")
 

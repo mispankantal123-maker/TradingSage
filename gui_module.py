@@ -1168,7 +1168,7 @@ class TradingBotGUI:
             self.log(f"❌ Error resetting order count: {str(e)}")
 
     def update_order_count_display(self):
-        """Update order count display in GUI - ENHANCED"""
+        """Update order count display in GUI - SILENT VERSION"""
         try:
             from risk_management import get_order_limit_status
             status = get_order_limit_status()
@@ -1195,15 +1195,6 @@ class TradingBotGUI:
             if hasattr(self, 'order_count_lbl'):
                 self.order_count_lbl.config(text=display_text, foreground=color)
 
-                # Log significant changes
-                if status['percentage_used'] >= 80:
-                    self.log(f"⚠️ Order limit warning: {count_text} ({status['percentage_used']:.0f}% used)")
-                elif status['current_count'] == 0:
-                    self.log(f"✅ Order count reset: {count_text}")
-            else:
-                # Fallback logging if label doesn't exist
-                logger(f"📊 Order Count: {display_text} ({status['percentage_used']:.0f}% used)")
-
             # Update max orders entry field to show current limit
             if hasattr(self, 'max_orders_entry'):
                 current_entry = self.max_orders_entry.get()
@@ -1215,11 +1206,10 @@ class TradingBotGUI:
             error_text = "❌ ERR"
             if hasattr(self, 'order_count_lbl'):
                 self.order_count_lbl.config(text=error_text, foreground="red")
-            logger(f"❌ Order count update error: {str(e)}")
-            self.log(f"❌ Order limit display error: {str(e)}")
+            # Silent error - no logging to avoid spam
 
     def update_daily_order_count_display(self):
-        """Update daily order count display in GUI"""
+        """Update daily order count display in GUI - SILENT VERSION"""
         try:
             from risk_management import get_daily_order_limit_status
             status = get_daily_order_limit_status()
@@ -1249,20 +1239,17 @@ class TradingBotGUI:
                 parent_frame = current_count_widget.master
                 
                 self.daily_order_count_lbl = ttk.Label(parent_frame, text=display_text, foreground=color)
-                self.daily_order_count_lbl.grid(row=0, column=2, padx=(15, 5)) # Adjust column index as needed
-                self.log("Created daily order count label")
+                self.daily_order_count_lbl.grid(row=0, column=2, padx=(15, 5))
             else:
                 self.daily_order_count_lbl.config(text=display_text, foreground=color)
 
-            # Log significant changes for daily count
-            if status['daily_percentage_used'] >= 80:
-                self.log(f"⚠️ Daily Order Limit Warning: {count_text} ({status['daily_percentage_used']:.0f}% used)")
-            elif status['current_daily_count'] == 0:
-                self.log(f"✅ Daily Order Count Reset: {count_text}")
+            # ONLY log critical warnings - no regular updates
+            if status['daily_percentage_used'] >= 90 and not hasattr(self, '_daily_warning_shown'):
+                self.log(f"🚨 CRITICAL: Daily Order Limit Nearly Reached: {count_text}")
+                self._daily_warning_shown = True
 
         except Exception as e:
             error_text = "❌ ERR"
             if hasattr(self, 'daily_order_count_lbl'):
                 self.daily_order_count_lbl.config(text=error_text, foreground="red")
-            logger(f"❌ Daily order count update error: {str(e)}")
-            self.log(f"❌ Daily order limit display error: {str(e)}")
+            # Silent error - no logging to avoid spam
