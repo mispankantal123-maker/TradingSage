@@ -163,20 +163,60 @@ def main_trading_loop() -> None:
                                     logger(f"🛑 Order limit reached - skipping {symbol}")
                                     continue
 
-                                # Get ALL parameters from GUI with proper validation
-                                success = execute_trade_signal(symbol, action)
+                                # Get GUI instance for parameter retrieval
+                                gui = None
+                                try:
+                                    main_module = __import__('__main__')
+                                    if hasattr(main_module, 'gui'):
+                                        gui = main_module.gui
+                                except Exception as gui_e:
+                                    logger(f"⚠️ GUI instance retrieval failed: {str(gui_e)}")
+
+                                # Get trading parameters from GUI with proper defaults
+                                lot_size = 0.01
+                                tp_value = "20"
+                                sl_value = "10"
+                                tp_unit = "pips"
+                                sl_unit = "pips"
+
+                                if gui:
+                                    try:
+                                        lot_size = float(gui.get_current_lot() or 0.01)
+                                        tp_value = gui.get_current_tp() or "20"
+                                        sl_value = gui.get_current_sl() or "10"
+                                        tp_unit = gui.get_current_tp_unit() or "pips"
+                                        sl_unit = gui.get_current_sl_unit() or "pips"
+                                    except:
+                                        pass  # Use defaults
+
+                                # Set strategy-specific defaults if empty
+                                if not tp_value or tp_value == "0":
+                                    tp_value = {
+                                        "Scalping": "15",
+                                        "HFT": "8",
+                                        "Intraday": "50",
+                                        "Arbitrage": "25"
+                                    }.get(current_strategy, "20")
+
+                                if not sl_value or sl_value == "0":
+                                    sl_value = {
+                                        "Scalping": "8",
+                                        "HFT": "4",
+                                        "Intraday": "25",
+                                        "Arbitrage": "10"
+                                    }.get(current_strategy, "10")
+
+                                # Execute the trade with proper validation
+                                success = execute_trade_signal(symbol, action, lot_size, tp_value, sl_value, tp_unit, sl_unit, current_strategy)
 
                                 if success:
-                                    increment_daily_trade_count()
                                     logger(f"✅ Trade executed successfully for {symbol}")
 
-                                    # Update GUI order count immediately
-                                    try:
-                                        main_module = __import__('__main__')
-                                        if hasattr(main_module, 'gui') and main_module.gui and hasattr(main_module.gui, 'update_order_count_display'):
-                                            main_module.gui.update_order_count_display()
-                                    except Exception as gui_update_e:
-                                        logger(f"⚠️ GUI update error: {str(gui_update_e)}")
+                                    # Update GUI order count safely
+                                    if gui and hasattr(gui, 'order_count'):
+                                        gui.order_count += 1
+                                        if hasattr(gui, 'update_order_count_display'):
+                                            gui.root.after(0, gui.update_order_count_display)
                                 else:
                                     logger(f"❌ Trade execution failed for {symbol}")
 
@@ -626,7 +666,50 @@ def trading_loop():
                                     logger(f"🛑 Order limit reached - skipping {symbol}")
                                     continue
 
-                                success = execute_trade_signal(symbol, action)
+                                # Get GUI instance for parameter retrieval
+                                gui = None
+                                try:
+                                    main_module = __import__('__main__')
+                                    if hasattr(main_module, 'gui'):
+                                        gui = main_module.gui
+                                except Exception as gui_e:
+                                    logger(f"⚠️ GUI instance retrieval failed: {str(gui_e)}")
+
+                                # Get trading parameters from GUI with proper defaults
+                                lot_size = 0.01
+                                tp_value = "20"
+                                sl_value = "10"
+                                tp_unit = "pips"
+                                sl_unit = "pips"
+
+                                if gui:
+                                    try:
+                                        lot_size = float(gui.get_current_lot() or 0.01)
+                                        tp_value = gui.get_current_tp() or "20"
+                                        sl_value = gui.get_current_sl() or "10"
+                                        tp_unit = gui.get_current_tp_unit() or "pips"
+                                        sl_unit = gui.get_current_sl_unit() or "pips"
+                                    except:
+                                        pass  # Use defaults
+
+                                # Set strategy-specific defaults if empty
+                                if not tp_value or tp_value == "0":
+                                    tp_value = {
+                                        "Scalping": "15",
+                                        "HFT": "8",
+                                        "Intraday": "50",
+                                        "Arbitrage": "25"
+                                    }.get(current_strategy, "20")
+
+                                if not sl_value or sl_value == "0":
+                                    sl_value = {
+                                        "Scalping": "8",
+                                        "HFT": "4",
+                                        "Intraday": "25",
+                                        "Arbitrage": "10"
+                                    }.get(current_strategy, "10")
+
+                                success = execute_trade_signal(symbol, action, lot_size, tp_value, sl_value, tp_unit, sl_unit, current_strategy)
 
                                 if success:
                                     increment_daily_trade_count()

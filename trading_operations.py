@@ -155,8 +155,8 @@ def calculate_tp_sl_all_modes(input_value: str, unit: str, symbol: str, order_ty
         return 0.0
 
 
-def execute_trade_signal(symbol: str, action: str, lot_size: float, tp_value: str, sl_value: str, 
-                        tp_unit: str, sl_unit: str, strategy: str = "Manual") -> bool:
+def execute_trade_signal(symbol: str, action: str, lot_size: float = 0.01, tp_value: str = "20", sl_value: str = "10", 
+                        tp_unit: str = "pips", sl_unit: str = "pips", strategy: str = "Manual") -> bool:
     """Execute trading signal dengan enhanced safety checks dan professional systems integration"""
     try:
         logger(f"🎯 ENHANCED Execute trade: {action} {lot_size} lots {symbol}")
