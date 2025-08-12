@@ -19,15 +19,30 @@ from indicators import calculate_support_resistance
 
 
 def run_strategy(strategy: str, df: pd.DataFrame, symbol: str) -> Tuple[Optional[str], List[str]]:
-    """Enhanced strategy execution with precise price analysis and validation"""
+    """Enhanced strategy execution with MTF analysis and dynamic position sizing"""
     try:
-        # Allow strategy analysis to proceed when called
-
         logger(f"🎯 Running {strategy} strategy for {symbol}")
 
         if len(df) < 50:
             logger(f"❌ Insufficient data for {symbol}: {len(df)} bars (need 50+)")
             return None, [f"Insufficient data: {len(df)} bars"]
+
+        # PROFESSIONAL UPGRADE: Multi-timeframe confluence check
+        try:
+            from multi_timeframe_analysis import should_trade_based_on_mtf
+            should_trade, mtf_direction, mtf_analysis = should_trade_based_on_mtf(symbol, strategy, min_confluence_score=65)
+            
+            if not should_trade:
+                confluence_score = mtf_analysis.get('confluence_score', 0)
+                logger(f"⚠️ MTF Analysis: Confluence too low ({confluence_score:.1f}/100) - Skipping trade")
+                return None, [f"MTF confluence insufficient: {confluence_score:.1f}%"]
+            
+            logger(f"✅ MTF Analysis: {mtf_direction} signal confirmed (Score: {mtf_analysis.get('confluence_score', 0):.1f}/100)")
+            
+        except Exception as mtf_e:
+            logger(f"⚠️ MTF analysis error, proceeding with single timeframe: {str(mtf_e)}")
+            should_trade = True
+            mtf_direction = None
 
         # Get precision info from dataframe attributes or MT5
         digits = df.attrs.get('digits', 5)

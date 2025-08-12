@@ -32,7 +32,7 @@ recovery_thread: Optional[threading.Thread] = None # Added for recovery monitor
 current_strategy = "Scalping"
 
 
-def bot_thread() -> None:
+def main_trading_loop() -> None:
     """Main bot thread - identical logic to original but modular"""
     global is_running, current_strategy # Changed bot_running to is_running
 
@@ -320,7 +320,7 @@ def safe_trading_loop():
 
     try:
         # Call the original bot_thread logic
-        bot_thread() 
+        main_trading_loop() 
     except KeyboardInterrupt:
         logger("⚠️ Trading loop interrupted by user")
     except Exception as e:
@@ -430,6 +430,23 @@ def get_bot_status() -> Dict[str, Any]:
             'running': is_running, # Changed bot_running to is_running
             'error': str(e)
         }
+
+
+def stop_bot():
+    """Stop the trading bot gracefully"""
+    global is_running, bot_thread
+    try:
+        logger("🛑 Stopping trading bot...")
+        is_running = False
+        
+        # Wait for bot thread to finish
+        if bot_thread and bot_thread.is_alive():
+            bot_thread.join(timeout=5)
+        
+        logger("✅ Trading bot stopped successfully")
+        
+    except Exception as e:
+        logger(f"❌ Error stopping bot: {str(e)}")
 
 
 def emergency_stop_all():

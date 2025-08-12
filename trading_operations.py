@@ -18,6 +18,15 @@ except ImportError:
     import mt5_mock as mt5
     print("⚠️ Trading Operations using mock for development")
 
+# PROFESSIONAL UPGRADES: Import enhanced modules
+try:
+    from enhanced_position_sizing import get_dynamic_position_size
+    DYNAMIC_SIZING_AVAILABLE = True
+    logger("✅ Dynamic position sizing loaded")
+except ImportError:
+    DYNAMIC_SIZING_AVAILABLE = False
+    logger("⚠️ Dynamic position sizing not available")
+
 
 def calculate_pip_value(symbol: str, lot_size: float) -> float:
     """Calculate pip value for position sizing"""
@@ -245,131 +254,142 @@ def open_order(symbol: str, action: str, lot_size: float, tp_price: float = 0.0,
                 else:
                     return False
 
-        tick = mt5.symbol_info_tick(symbol)
-        if not tick:
-            logger(f"❌ Cannot get current tick for {symbol}")
-            return False
+            tick = mt5.symbol_info_tick(symbol)
+            if not tick:
+                logger(f"❌ Cannot get current tick for {symbol}")
+                return False
 
-        symbol_info = mt5.symbol_info(symbol)
-        if not symbol_info:
-            logger(f"❌ Cannot get symbol info for {symbol}")
-            return False
+            symbol_info = mt5.symbol_info(symbol)
+            if not symbol_info:
+                logger(f"❌ Cannot get symbol info for {symbol}")
+                return False
 
-        if action.upper() == "BUY":
-            order_type = mt5.ORDER_TYPE_BUY
-            price = tick.ask
-        elif action.upper() == "SELL":
-            order_type = mt5.ORDER_TYPE_SELL
-            price = tick.bid
-        else:
-            logger(f"❌ Invalid action: {action}")
-            return False
+            if action.upper() == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price = tick.ask
+            elif action.upper() == "SELL":
+                order_type = mt5.ORDER_TYPE_SELL
+                price = tick.bid
+            else:
+                logger(f"❌ Invalid action: {action}")
+                return False
 
-        digits = symbol_info.digits
-        point = symbol_info.point
+            digits = symbol_info.digits
+            point = symbol_info.point
 
-        min_stops_level = getattr(symbol_info, 'trade_stops_level', 0) * point
-        if min_stops_level == 0:
-            min_stops_level = 10 * point
+            min_stops_level = getattr(symbol_info, 'trade_stops_level', 0) * point
+            if min_stops_level == 0:
+                min_stops_level = 10 * point
 
-        # Validate TP/SL distances for real trading
-        if action.upper() == "BUY":
-            if tp_price > 0:
-                min_tp = price + min_stops_level
-                if tp_price < min_tp:
-                    tp_price = round(min_tp, digits)
-            if sl_price > 0:
-                max_sl = price - min_stops_level
-                if sl_price > max_sl:
-                    sl_price = round(max_sl, digits)
-        else:  # SELL
-            if tp_price > 0:
-                max_tp = price - min_stops_level
-                if tp_price > max_tp:
-                    tp_price = round(max_tp, digits)
-            if sl_price > 0:
-                min_sl = price + min_stops_level
-                if sl_price < min_sl:
-                    sl_price = round(min_sl, digits)
+            # Validate TP/SL distances for real trading
+            if action.upper() == "BUY":
+                if tp_price > 0:
+                    min_tp = price + min_stops_level
+                    if tp_price < min_tp:
+                        tp_price = round(min_tp, digits)
+                if sl_price > 0:
+                    max_sl = price - min_stops_level
+                    if sl_price > max_sl:
+                        sl_price = round(max_sl, digits)
+            else:  # SELL
+                if tp_price > 0:
+                    max_tp = price - min_stops_level
+                    if tp_price > max_tp:
+                        tp_price = round(max_tp, digits)
+                if sl_price > 0:
+                    min_sl = price + min_stops_level
+                    if sl_price < min_sl:
+                        sl_price = round(min_sl, digits)
 
-        filling_mode = getattr(symbol_info, 'filling_mode', 0)
-        if filling_mode & 2:
-            fill_type = mt5.ORDER_FILLING_IOC
-        elif filling_mode & 1:
-            fill_type = mt5.ORDER_FILLING_FOK
-        else:
-            fill_type = mt5.ORDER_FILLING_RETURN
+            filling_mode = getattr(symbol_info, 'filling_mode', 0)
+            if filling_mode & 2:
+                fill_type = mt5.ORDER_FILLING_IOC
+            elif filling_mode & 1:
+                fill_type = mt5.ORDER_FILLING_FOK
+            else:
+                fill_type = mt5.ORDER_FILLING_RETURN
 
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
-            "volume": round(lot_size, 2),
-            "type": order_type,
-            "price": round(price, digits),
-            "sl": round(sl_price, digits) if sl_price > 0 else 0.0,
-            "tp": round(tp_price, digits) if tp_price > 0 else 0.0,
-            "deviation": 50,
-            "magic": 234000,
-            "comment": comment[:31] if comment else "LiveBot",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": fill_type,
-        }
-
-        logger(f"📤 LIVE ORDER: {action} {lot_size} {symbol} @ {price:.{digits}f}")
-        logger(f"   TP: {tp_price:.{digits}f} | SL: {sl_price:.{digits}f}")
-
-        # Send REAL order to live market
-        result = mt5.order_send(request)
-
-        if result is None:
-            logger("❌ Live order failed: No result returned")
-            return False
-
-        retcode = result.retcode if hasattr(result, 'retcode') else result.get('retcode', 0)
-
-        if retcode != mt5.TRADE_RETCODE_DONE:
-            comment = result.comment if hasattr(result, 'comment') else result.get('comment', 'Unknown error')
-            logger(f"❌ Live order failed: Code {retcode} - {comment}")
-            return False
-        else:
-            order = result.order if hasattr(result, 'order') else result.get('order', 0)
-            deal = result.deal if hasattr(result, 'deal') else result.get('deal', 0)
-            volume = result.volume if hasattr(result, 'volume') else result.get('volume', 0)
-            exec_price = result.price if hasattr(result, 'price') else result.get('price', 0)
-
-            logger(f"✅ LIVE ORDER EXECUTED!")
-            logger(f"   Order: #{order} | Deal: #{deal}")
-            logger(f"   Volume: {volume} | Price: {exec_price}")
-
-            # Update GUI
-            try:
-                import __main__
-                if hasattr(__main__, 'gui') and __main__.gui:
-                    __main__.gui.update_account_info()
-                    __main__.gui.update_positions()
-            except:
-                pass
-
-            # Log to CSV
-            order_data = {
-                'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'symbol': symbol,
-                'action': action,
-                'volume': lot_size,
-                'price': exec_price,
-                'tp': tp_price if tp_price > 0 else 0,
-                'sl': sl_price if sl_price > 0 else 0,
-                'comment': comment,
-                'ticket': order,
-                'profit': 0.0
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": round(lot_size, 2),
+                "type": order_type,
+                "price": round(price, digits),
+                "sl": round(sl_price, digits) if sl_price > 0 else 0.0,
+                "tp": round(tp_price, digits) if tp_price > 0 else 0.0,
+                "deviation": 50,
+                "magic": 234000,
+                "comment": comment[:31] if comment else "LiveBot",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": fill_type,
             }
 
-            log_order_csv("orders.csv", order_data)
-            return True
+            logger(f"📤 LIVE ORDER: {action} {lot_size} {symbol} @ {price:.{digits}f}")
+            logger(f"   TP: {tp_price:.{digits}f} | SL: {sl_price:.{digits}f}")
 
-    except Exception as e:
-        logger(f"❌ Error executing live order: {str(e)}")
-        return False
+            # Send REAL order to live market
+            result = mt5.order_send(request)
+
+            if result is None:
+                logger("❌ Live order failed: No result returned")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                return False
+
+            retcode = result.retcode if hasattr(result, 'retcode') else result.get('retcode', 0)
+
+            if retcode != mt5.TRADE_RETCODE_DONE:
+                comment = result.comment if hasattr(result, 'comment') else result.get('comment', 'Unknown error')
+                logger(f"❌ Live order failed: Code {retcode} - {comment}")
+                if attempt < max_retries - 1:
+                    time.sleep(1)
+                    continue
+                return False
+            else:
+                order = result.order if hasattr(result, 'order') else result.get('order', 0)
+                deal = result.deal if hasattr(result, 'deal') else result.get('deal', 0)
+                volume = result.volume if hasattr(result, 'volume') else result.get('volume', 0)
+                exec_price = result.price if hasattr(result, 'price') else result.get('price', 0)
+
+                logger(f"✅ LIVE ORDER EXECUTED!")
+                logger(f"   Order: #{order} | Deal: #{deal}")
+                logger(f"   Volume: {volume} | Price: {exec_price}")
+
+                # Update GUI
+                try:
+                    import __main__
+                    if hasattr(__main__, 'gui') and __main__.gui:
+                        __main__.gui.update_account_info()
+                        __main__.gui.update_positions()
+                except:
+                    pass
+
+                # Log to CSV
+                order_data = {
+                    'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'symbol': symbol,
+                    'action': action,
+                    'volume': lot_size,
+                    'price': exec_price,
+                    'tp': tp_price if tp_price > 0 else 0,
+                    'sl': sl_price if sl_price > 0 else 0,
+                    'comment': comment,
+                    'ticket': order,
+                    'profit': 0.0
+                }
+
+                log_order_csv("orders.csv", order_data)
+                return True
+
+        except Exception as e:
+            logger(f"❌ Error executing live order (attempt {attempt + 1}): {str(e)}")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return False
+    
+    return False
 
 
 def close_position_by_ticket(ticket: int) -> bool:
@@ -463,14 +483,76 @@ def execute_trade_signal(symbol: str, action: str) -> bool:
             pass
 
         params = DEFAULT_PARAMS.get(current_strategy, DEFAULT_PARAMS["Scalping"])
-        lot_size = float(params["lot_size"])
-
+        
+        # PROFESSIONAL UPGRADE: Dynamic Position Sizing
+        lot_size = float(params["lot_size"])  # Fallback default
+        
+        # Get initial prices for position sizing calculation
+        tick = mt5.symbol_info_tick(symbol)
+        if not tick:
+            logger(f"❌ Cannot get live price for {symbol}")
+            return False
+        
+        current_price = tick.ask if action.upper() == "BUY" else tick.bid
+        
+        # Get stop loss for position sizing calculation
+        try:
+            import __main__
+            if hasattr(__main__, 'gui') and __main__.gui:
+                gui_sl = __main__.gui.sl_entry.get()
+                if gui_sl and gui_sl.strip():
+                    sl_value_temp = gui_sl.strip()
+                else:
+                    sl_value_temp = params["sl_pips"]
+            else:
+                sl_value_temp = params["sl_pips"]
+        except:
+            sl_value_temp = params["sl_pips"]
+        
+        # Calculate stop loss price for dynamic sizing
+        sl_distance_pips = float(sl_value_temp) if str(sl_value_temp).replace('.', '').isdigit() else 10.0
+        
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info:
+            point = getattr(symbol_info, 'point', 0.00001)
+            pip_multiplier = 10 if "JPY" in symbol else 10
+            sl_distance = sl_distance_pips * point * pip_multiplier
+            
+            if action.upper() == "BUY":
+                estimated_sl_price = current_price - sl_distance
+            else:
+                estimated_sl_price = current_price + sl_distance
+        else:
+            estimated_sl_price = current_price * 0.99 if action.upper() == "BUY" else current_price * 1.01
+        
+        # DYNAMIC POSITION SIZING CALCULATION
+        if DYNAMIC_SIZING_AVAILABLE:
+            try:
+                dynamic_lot, sizing_details = get_dynamic_position_size(
+                    symbol=symbol,
+                    entry_price=current_price,
+                    stop_loss=estimated_sl_price,
+                    strategy=current_strategy
+                )
+                
+                if dynamic_lot > 0:
+                    lot_size = dynamic_lot
+                    logger(f"💰 Dynamic lot size: {lot_size} (Risk: {sizing_details.get('risk_percent', 0):.2f}%)")
+                    logger(f"   Sizing method: {sizing_details.get('method', 'Unknown')}")
+                else:
+                    logger(f"⚠️ Dynamic sizing returned invalid lot: {dynamic_lot}, using default")
+                    
+            except Exception as dyn_e:
+                logger(f"⚠️ Dynamic sizing error: {str(dyn_e)}, using default lot size")
+        
+        # GUI override (if user manually sets lot size)
         try:
             import __main__
             if hasattr(__main__, 'gui') and __main__.gui:
                 gui_lot = __main__.gui.get_current_lot_size()
                 if gui_lot > 0:
                     lot_size = gui_lot
+                    logger(f"🔧 GUI override: Using manual lot size {lot_size}")
         except:
             pass
 

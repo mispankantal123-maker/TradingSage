@@ -1,7 +1,7 @@
 # MT5 Advanced Auto Trading Bot
 
 ### Overview
-This project is a professional-grade algorithmic trading platform for MetaTrader 5, designed for advanced financial strategy development with comprehensive risk management and multi-strategy support. It offers a modular, maintainable, and production-ready solution for automated trading, refactored for clean architecture while maintaining full functionality. The system supports 24/7 trading operations and integrates real-time performance tracking and notifications.
+This project is a professional-grade algorithmic trading platform for MetaTrader 5, enhanced with advanced profit optimization features requested by a trader with 2 billion monthly turnover. The system features dynamic position sizing, multi-timeframe analysis, and comprehensive risk management for maximum profit generation while maintaining controlled risk exposure. It offers a modular, maintainable, and production-ready solution for automated trading with professional-grade enhancements.
 
 ### User Preferences
 **Communication Style**: Simple, everyday language
@@ -24,7 +24,9 @@ The system employs a modular architecture, refactoring a monolithic application 
 
 **Analysis Engine:**
 -   **Technical Analysis**: Implements a comprehensive suite of technical indicators (EMAs, RSI, MACD, Bollinger Bands, ATR, Stochastic, WMA).
--   **Trading Strategies**: Incorporates four distinct trading strategies: Scalping, Intraday, Arbitrage, and HFT, with configurable parameters.
+-   **Multi-Timeframe Analysis**: Professional MTF confluence system analyzing M1, M5, M15, H1 timeframes with scoring and risk assessment.
+-   **Trading Strategies**: Four enhanced trading strategies with MTF validation and dynamic position sizing integration.
+-   **Dynamic Position Sizing**: ATR-based volatility calculations, equity risk management, and correlation risk monitoring.
 -   **AI Analysis**: Advanced AI for market analysis and pattern recognition.
 
 **Trading Operations:**
@@ -42,14 +44,17 @@ The system employs a modular architecture, refactoring a monolithic application 
 -   **Test Suite**: Comprehensive test suite for all modules.
 
 **Key Features:**
--   **Trading Strategies**: Scalping, Intraday, Arbitrage, and HFT, each with specific entry/exit conditions and TP/SL settings.
--   **Technical Analysis Suite**: Diverse set of moving averages, oscillators, and volatility indicators for robust signal generation.
+-   **Professional Trading Enhancements**: Dynamic position sizing based on ATR volatility, multi-timeframe confluence analysis, and correlation risk management for profit optimization.
+-   **Trading Strategies**: Scalping, Intraday, Arbitrage, and HFT, each with specific entry/exit conditions, TP/SL settings, and enhanced with MTF validation.
+-   **Dynamic Position Sizing**: ATR-based volatility calculations, equity percentage risk management, strategy-specific adjustments, and correlation risk monitoring.
+-   **Multi-Timeframe Analysis**: M1, M5, M15, H1 confluence analysis with scoring system (0-100) and risk factor assessment for higher probability setups.
+-   **Technical Analysis Suite**: Diverse set of moving averages, oscillators, and volatility indicators enhanced with multi-timeframe validation.
 -   **GUI Interface**: Intuitive, dark-themed interface with controls for MT5 connection, bot activation, emergency stop, and detailed parameter configuration. Supports real-time account data, position display, and scrolling logs.
--   **Risk Management**: Configurable daily trade limits, maximum open positions, risk per trade, margin level alerts, and session-based adjustments. Includes smart spread detection and dynamic spread limits for various asset classes.
--   **Comprehensive TP/SL System**: Supports pips, price, percentage (balance/equity), and money (currency) based TP/SL calculations, fully integrated with the GUI and MT5. Includes robust validation for minimum stop distances and symbol-specific requirements.
--   **24/7 Operation**: Enabled for continuous trading across all sessions, with softened news time warnings and enhanced error recovery.
+-   **Advanced Risk Management**: Configurable daily trade limits, maximum open positions, dynamic risk per trade, correlation monitoring, margin level alerts, and session-based adjustments.
+-   **Comprehensive TP/SL System**: Supports pips, price, percentage (balance/equity), and money (currency) based TP/SL calculations, fully integrated with the GUI and MT5.
+-   **24/7 Operation**: Enabled for continuous trading across all sessions, with enhanced error recovery and professional-grade monitoring.
 -   **Telegram Notifications**: Real-time alerts for trades, position changes, account monitoring, strategy changes, session updates, bot status, risk alerts, and daily summaries.
--   **Universal Symbol Support**: Comprehensive handling for over 50 asset types including Forex, Crypto, Metals, Indices, Commodities, and Stocks, ensuring compatibility and accurate TP/SL calculations across all symbols.
+-   **Universal Symbol Support**: Comprehensive handling for over 50 asset types including Forex, Crypto, Metals, Indices, Commodities, and Stocks.
 
 ### External Dependencies
 -   **pandas**: For market data analysis and DataFrame operations.
