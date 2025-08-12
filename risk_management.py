@@ -51,6 +51,59 @@ def get_order_limit_status() -> Dict[str, Any]:
             'orders_remaining': 10
         }
 
+def get_daily_order_limit_status() -> Dict[str, Any]:
+    """Get daily order limit status - FIXED FUNCTION"""
+    try:
+        global daily_trade_count, max_daily_orders, last_reset_date
+        
+        # Reset if new day
+        today = datetime.date.today()
+        if today != last_reset_date:
+            daily_trade_count = 0
+            last_reset_date = today
+            logger("🔄 Daily order count reset for new day")
+        
+        percentage_used = (daily_trade_count / max_daily_orders * 100) if max_daily_orders > 0 else 0
+        
+        return {
+            'daily_count': daily_trade_count,
+            'daily_limit': max_daily_orders,
+            'percentage_used': percentage_used,
+            'orders_remaining': max(0, max_daily_orders - daily_trade_count),
+            'reset_date': last_reset_date.strftime('%Y-%m-%d')
+        }
+        
+    except Exception as e:
+        logger(f"❌ Error getting daily order limit status: {str(e)}")
+        return {
+            'daily_count': 0,
+            'daily_limit': 50,
+            'percentage_used': 0,
+            'orders_remaining': 50,
+            'reset_date': datetime.date.today().strftime('%Y-%m-%d')
+        }
+
+def update_daily_order_count():
+    """Update daily order count"""
+    global daily_trade_count
+    daily_trade_count += 1
+    logger(f"📊 Daily order count updated: {daily_trade_count}")
+
+def set_daily_order_limit(new_limit: int):
+    """Set new daily order limit"""
+    global max_daily_orders
+    max_daily_orders = max(1, min(200, new_limit))  # Between 1-200
+    logger(f"⚙️ Daily order limit set to: {max_daily_orders}")
+
+def check_daily_order_limit() -> bool:
+    """Check if daily order limit is reached"""
+    try:
+        status = get_daily_order_limit_status()
+        return status['daily_count'] < status['daily_limit']
+    except Exception as e:
+        logger(f"❌ Error checking daily limit: {str(e)}")
+        return True  # Allow trading on error
+
 def reset_order_count():
     """Reset order count to zero"""
     global current_order_count

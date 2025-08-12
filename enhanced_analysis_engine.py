@@ -49,6 +49,10 @@ def get_enhanced_analysis(symbol: str, strategy: str, df: pd.DataFrame) -> Dict[
             mtf_signals, tech_signals, risk_assessment, strategy
         )
         
+        # Store original signal for potential rescue
+        if combined_analysis.get('signal'):
+            combined_analysis['original_signal'] = combined_analysis['signal']
+        
         # ULTRA ENHANCEMENT: Apply advanced signal optimization
         if combined_analysis['signal'] and combined_analysis['confidence'] > 0:
             try:
@@ -86,6 +90,21 @@ def get_enhanced_analysis(symbol: str, strategy: str, df: pd.DataFrame) -> Dict[
             except Exception as opt_e:
                 logger(f"⚠️ Advanced optimization error: {str(opt_e)}")
         
+        # STEP 3: Smart Aggressiveness Enhancement
+        if combined_analysis['signal'] and combined_analysis['confidence'] > 0:
+            try:
+                from enhanced_aggressiveness_module import apply_smart_aggressiveness
+                
+                # Apply smart aggressiveness before final calibration
+                combined_analysis = apply_smart_aggressiveness(symbol, strategy, combined_analysis)
+                
+                logger(f"🚀 SMART AGGRESSIVENESS: {combined_analysis.get('aggressiveness_level', 'NORMAL')}")
+                logger(f"   📈 Boost: +{combined_analysis.get('aggressiveness_boost', 0)*100:.1f}%")
+                logger(f"   🎯 Dynamic threshold: {combined_analysis.get('dynamic_threshold', 0.70)*100:.1f}%")
+                
+            except Exception as agg_e:
+                logger(f"⚠️ Smart aggressiveness error: {str(agg_e)}")
+        
         # FINAL STEP: Ultra-Precise Confidence Calibration
         if combined_analysis['signal'] and combined_analysis['confidence'] > 0:
             try:
@@ -102,17 +121,31 @@ def get_enhanced_analysis(symbol: str, strategy: str, df: pd.DataFrame) -> Dict[
                     combined_analysis['tp_sl_adjustments'] = calibration_result['tp_sl_adjustments']
                     combined_analysis['calibration_factors'] = calibration_result.get('calibration_factors', [])
                     
+                    # Apply smart aggressiveness to position sizing
+                    if 'frequency_multiplier' in combined_analysis:
+                        combined_analysis['position_sizing_factor'] *= min(1.5, combined_analysis['frequency_multiplier'])
+                    
                     logger(f"🎯 ULTRA-CALIBRATED: {calibration_result['quality_grade']} grade signal")
                     logger(f"   📊 Gates passed: {len(calibration_result.get('quality_gates_passed', []))}")
                     logger(f"   🚀 Action: {calibration_result['recommended_action']}")
                     
                 else:
-                    # Signal rejected by ultra-precise calibration
-                    combined_analysis['signal'] = None
-                    combined_analysis['confidence'] = calibration_result['calibrated_confidence']
-                    combined_analysis['reason'] = calibration_result.get('rejection_reason', 'Ultra-calibration rejected signal')
-                    
-                    logger(f"🛑 ULTRA-FILTER: Signal rejected - {calibration_result.get('rejection_reason', 'Quality insufficient')}")
+                    # Check if smart aggressiveness can rescue low-quality signal
+                    dynamic_threshold = combined_analysis.get('dynamic_threshold', 0.70)
+                    if combined_analysis['confidence'] >= dynamic_threshold:
+                        # Override rejection with smart aggressiveness
+                        combined_analysis['signal'] = combined_analysis.get('original_signal', combined_analysis['signal'])
+                        combined_analysis['rescued_by_aggressiveness'] = True
+                        combined_analysis['quality_grade'] = 'B-'  # Moderate quality for rescued signals
+                        combined_analysis['position_sizing_factor'] = 0.8  # Reduced size for rescued signals
+                        logger(f"🎯 SMART RESCUE: Signal rescued by aggressiveness ({combined_analysis['confidence']:.1%} >= {dynamic_threshold:.1%})")
+                    else:
+                        # Signal rejected by ultra-precise calibration
+                        combined_analysis['signal'] = None
+                        combined_analysis['confidence'] = calibration_result['calibrated_confidence']
+                        combined_analysis['reason'] = calibration_result.get('rejection_reason', 'Ultra-calibration rejected signal')
+                        
+                        logger(f"🛑 ULTRA-FILTER: Signal rejected - {calibration_result.get('rejection_reason', 'Quality insufficient')}")
                     
             except Exception as cal_e:
                 logger(f"⚠️ Ultra-calibration error: {str(cal_e)}")
